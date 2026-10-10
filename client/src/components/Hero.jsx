@@ -64,7 +64,7 @@ export default function Hero() {
             <div className="flex items-center gap-3">
               <div className="h-12 w-12 rounded-full bg-primary" />
               <div>
-                <p className="font-semibold text-slate-900">Alex Rivera</p>
+                <p className="font-semibold text-slate-900">Chamara Madusanka</p>
                 <p className="text-xs text-slate-600">Full-stack Developer</p>
               </div>
             </div>
