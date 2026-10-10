@@ -20,13 +20,13 @@ export default function Navbar() {
         <ul className="hidden items-center gap-6 md:flex">
           {links.map((l) => (
             <li key={l.label}>
-              <a href={l.href} className="text-slate-700 hover:text-primary">{l.label}</a>
+              <a href={l.href} className="font-semibold text-slate-900 hover:text-primary">{l.label}</a>
             </li>
           ))}
         </ul>
 
         <div className="hidden items-center gap-3 md:flex">
-          <Link to="/login" className="rounded-lg border border-primary px-4 py-2 font-medium text-primary hover:bg-blue-50">
+          <Link to="/login" className="rounded-lg border border-slate-200 px-4 py-2 font-medium text-primary hover:bg-slate-50>
             Login
           </Link>
           <Link to="/register" className="rounded-lg bg-primary px-4 py-2 font-medium text-white hover:bg-primary-dark">
