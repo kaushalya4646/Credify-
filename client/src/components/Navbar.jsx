@@ -5,7 +5,7 @@ const links = [
   { label: 'Home', href: '#home' },
   { label: 'About', href: '#about' },
   { label: 'How It Works', href: '#how-it-works' },
-  { label: 'For Candidates', href: '#why-credify' },
+  { label: 'For Candidates', href: '#CandidateDashboardPage' },
   { label: 'For Recruiters', href: '#why-credify' },
 ]
 
