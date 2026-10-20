@@ -105,9 +105,11 @@ export default function CandidateDashboardPage() {
               <p className="text-xs text-gray-500">Candidate account</p>
             </div>
           </div>
-          <button className="min-h-11 w-full rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <Link
+            to="/"
+           className="min-h-11 w-full rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
             Log out
-          </button>
+          </Link>
         </div>
       </aside>
 
