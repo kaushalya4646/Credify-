@@ -50,6 +50,11 @@ function RecruiterSidebar() {
           <p className="text-sm font-semibold text-slate-900 truncate">M Perera</p>
           <p className="text-xs text-slate-500">Recruiter account</p>
         </div>
+        </div>
+        <div className="px-6 pb-4">
+      <Link to="/" className="flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        Log out
+      </Link> 
       </div>
     </aside>
   )
