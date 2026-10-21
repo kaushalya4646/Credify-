@@ -70,6 +70,11 @@ const verifiedSkills = [
   { name: 'REST APIs', pct: 75 },
 ]
 
+<<<<<<< Updated upstream
+=======
+const candidateId = '1' // TODO: replace with the real candidate's id once this page uses live data
+
+>>>>>>> Stashed changes
 export default function FindCandidatesPage() {
   const [searchText, setSearchText] = useState('')
   const [activeFilter, setActiveFilter] = useState('Career role')
