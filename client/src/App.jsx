@@ -20,6 +20,12 @@ import CandidateProfileRecruiterViewPage from './pages/CandidateProfileRecruiter
 import AdminDashboardPage from './pages/AdminDashboardPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminCareerRolesPage from './pages/AdminCareerRolesPage'
+
+{/*import AdminSkillsPage from './pages/AdminSkillsPage'
+import AdminAssessmentsPage from './pages/AdminAssessmentsPage'
+import AdminReportsPage from './pages/AdminReportsPage'
+import AdminSystemSettingsPage from './pages/AdminSystemSettingsPage'*/}
+
 export default function App() {
   return (
     <Routes>
@@ -45,6 +51,12 @@ export default function App() {
       <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
       <Route path="/admin/users" element={<AdminUsersPage />} />
       <Route path="/admin/career-roles" element={<AdminCareerRolesPage />} />
+
+      {/*<Route path="/admin/skills" element={<AdminSkillsPage />} />
+      <Route path="/admin/assessments" element={<AdminAssessmentsPage />} />
+      <Route path="/admin/reports" element={<AdminReportsPage />} />
+      <Route path="/admin/settings" element={<AdminSystemSettingsPage />} /> */}
+
     </Routes>
   )
 }
