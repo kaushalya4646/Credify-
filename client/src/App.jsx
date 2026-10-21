@@ -18,7 +18,8 @@ import RecruiterProfilePage from './pages/RecruiterProfilePage'
 import CandidateProfileRecruiterViewPage from './pages/CandidateProfileRecruiterViewPage'
 
 import AdminDashboardPage from './pages/AdminDashboardPage'
-
+import AdminUsersPage from './pages/AdminUsersPage'
+import AdminCareerRolesPage from './pages/AdminCareerRolesPage'
 export default function App() {
   return (
     <Routes>
@@ -42,6 +43,8 @@ export default function App() {
       <Route path="/recruiter/candidates/:id" element={<CandidateProfileRecruiterViewPage />} />
 
       <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+      <Route path="/admin/users" element={<AdminUsersPage />} />
+      <Route path="/admin/career-roles" element={<AdminCareerRolesPage />} />
     </Routes>
   )
 }
