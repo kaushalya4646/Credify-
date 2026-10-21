@@ -8,6 +8,16 @@ import CareerRolePage from './pages/CareerRolePage'
 import AssessmentsPage from './pages/AssessmentsPage'
 import AssessmentResultPage from './pages/AssessmentResultPage'
 import SkillGapsPage from './pages/SkillGapsPage'
+import AssessmentScreenPage from './pages/AssessmentScreenPage'
+
+import RecruiterDashboardPage from './pages/RecruiterDashboardPage'
+import FindCandidatesPage from './pages/FindCandidatesPage'
+import CreateJobVacancyPage from './pages/CreateJobVacancyPage'
+import SavedCandidatesPage from './pages/SavedCandidatesPage'
+import RecruiterProfilePage from './pages/RecruiterProfilePage'
+import CandidateProfileRecruiterViewPage from './pages/CandidateProfileRecruiterViewPage'
+
+import AdminDashboardPage from './pages/AdminDashboardPage'
 
 export default function App() {
   return (
@@ -22,6 +32,16 @@ export default function App() {
       <Route path="/candidate/assessments" element={<AssessmentsPage />} />
       <Route path="/candidate/assessments/results" element={<AssessmentResultPage />} />
       <Route path="/candidate/skill-gaps" element={<SkillGapsPage />} />
+      <Route path="/candidate/assessments/screen" element={<AssessmentScreenPage />} />
+
+      <Route path="/recruiter/dashboard" element={<RecruiterDashboardPage />} />
+      <Route path="/recruiter/find-candidates" element={<FindCandidatesPage />} />
+      <Route path="/recruiter/jobs/create" element={<CreateJobVacancyPage />} />
+      <Route path="/recruiter/saved-candidates" element={<SavedCandidatesPage />} />
+      <Route path="/recruiter/profile" element={<RecruiterProfilePage />} />
+      <Route path="/recruiter/candidates/:id" element={<CandidateProfileRecruiterViewPage />} />
+
+      <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
     </Routes>
   )
 }
