@@ -70,11 +70,8 @@ const verifiedSkills = [
   { name: 'REST APIs', pct: 75 },
 ]
 
-<<<<<<< Updated upstream
-=======
 const candidateId = '1' // TODO: replace with the real candidate's id once this page uses live data
 
->>>>>>> Stashed changes
 export default function FindCandidatesPage() {
   const [searchText, setSearchText] = useState('')
   const [activeFilter, setActiveFilter] = useState('Career role')
@@ -83,7 +80,7 @@ export default function FindCandidatesPage() {
     <div className="min-h-screen bg-slate-50">
       <RecruiterSidebar />
       <div className="ml-60">
-        <header className="bg-white border-b border-slate-200 px-10 py-7">
+        <header className="bg-white border-b border-slate-200 px-10 spy-7">
           <h1 className="text-2xl font-semibold text-slate-900">Find Candidates</h1>
           <p className="text-sm text-slate-500 mt-1">Search verified candidates by skills, role or keywords</p>
         </header>
@@ -176,11 +173,13 @@ export default function FindCandidatesPage() {
                 </div>
               </div>
             </div>
-
             <div className="flex gap-4">
-              <button className="flex-1 py-3.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark">
+              <Link
+                to={`/recruiter/candidates/${candidateId}`}
+                className="flex-1 py-3.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark text-center"
+              >
                 View full profile
-              </button>
+              </Link>
               <button className="flex-1 py-3.5 rounded-xl bg-blue-50 border border-blue-100 text-primary font-semibold text-sm">
                 Explore other candidates
               </button>
