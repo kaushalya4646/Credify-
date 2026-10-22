@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 const emailPattern = /^\S+@\S+\.\S+$/
 
@@ -150,9 +150,9 @@ export default function LoginPage() {
                   Password
                 </label>
                 {/* TODO: link to the forgot-password page when it exists */}
-                <a href="#" className="text-[13px] font-medium text-primary hover:underline">
+                <Link to="/forgot-password" className="text-[13px] font-medium text-primary hover:underline">
                   Forgot password?
-                </a>
+                </Link>
               </div>
               <div className="relative mt-1.5">
                 <input
