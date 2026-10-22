@@ -25,6 +25,17 @@ import AdminAssessmentsPage from './pages/AdminAssessmentsPage'
 import AdminReportsPage from './pages/AdminReportsPage'
 import AdminSystemSettingsPage from './pages/AdminSystemSettingsPage'
 
+import NotFoundPage from './pages/NotFoundPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
+import TwoFactorVerificationPage from './pages/TwoFactorVerificationPage'
+import CareerRoleDetailsPage from './pages/CareerRoleDetailsPage'
+import AssessmentInstructionsPage from './pages/AssessmentInstructionsPage'
+import MyJobsPage from './pages/MyJobsPage'
+import AdminAssessmentEditorPage from './pages/AdminAssessmentEditorPage'
+import AdminVerificationRecordsPage from './pages/AdminVerificationRecordsPage'
+import AdminPlatformContentPage from './pages/AdminPlatformContentPage'
+
 export default function App() {
   return (
     <Routes>
@@ -54,6 +65,22 @@ export default function App() {
       <Route path="/admin/assessments" element={<AdminAssessmentsPage />} />
       <Route path="/admin/reports" element={<AdminReportsPage />} />
       <Route path="/admin/settings" element={<AdminSystemSettingsPage />} /> 
+
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/login/verify" element={<TwoFactorVerificationPage />} />
+
+      <Route path="/candidate/career-role/:id" element={<CareerRoleDetailsPage />} />
+      <Route path="/candidate/assessments/:id/start" element={<AssessmentInstructionsPage />} />
+
+      <Route path="/recruiter/jobs" element={<MyJobsPage />} />
+
+      <Route path="/admin/assessments/editor" element={<AdminAssessmentEditorPage />} />
+      <Route path="/admin/verification" element={<AdminVerificationRecordsPage />} />
+      <Route path="/admin/content" element={<AdminPlatformContentPage />} />
+
+      <Route path="*" element={<NotFoundPage />} />
+      
 
     </Routes>
   )
