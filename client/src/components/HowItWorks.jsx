@@ -9,6 +9,8 @@ function Icon({ children }) {
   )
 }
 
+
+
 const steps = [
   {
     title: 'Create Profile',
