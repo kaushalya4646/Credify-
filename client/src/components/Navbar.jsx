@@ -4,7 +4,9 @@ import { Link } from 'react-router-dom'
 const links = [
   { label: 'Home', href: '#home' },
   { label: 'How It Works', href: '#how-it-works' },
+  { label: 'Why Credify', href: '#why-credify'},
   { label: 'About', href: '#about' },
+
 ]
 
 export default function Navbar() {
