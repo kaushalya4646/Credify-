@@ -9,8 +9,6 @@ function Icon({ children }) {
   )
 }
 
-const shield = <path d="M12 3l7 3v6c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z" />
-
 const steps = [
   {
     title: 'Create Profile',
@@ -35,12 +33,12 @@ const steps = [
   {
     title: 'Verify Skills',
     text: 'Our peer-review & AI logic stamps your profile with tamper-proof verification badges.',
-    icon: <Icon>{shield}</Icon>,
+    icon: <ion-icon name="checkmark-outline"></ion-icon>,
   },
   {
     title: 'Get Career Ready',
     text: 'Instantly unlocked in premium talent pipelines tailored precisely to your certified strengths.',
-    icon: <Icon>{shield}</Icon>,
+    icon: <ion-icon name="briefcase-outline"></ion-icon>,
   },
 ]
 
