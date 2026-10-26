@@ -35,12 +35,20 @@ const steps = [
   {
     title: 'Verify Skills',
     text: 'Our peer-review & AI logic stamps your profile with tamper-proof verification badges.',
+<<<<<<< HEAD
+    icon: <ion-icon name="checkmark-outline" style={{ fontSize: '28px'}}></ion-icon>,
+=======
     icon: <ion-icon name="checkmark-outline"></ion-icon>,
+>>>>>>> 6cfd47ecda623bca2e51ba7f71b226834f5465f2
   },
   {
     title: 'Get Career Ready',
     text: 'Instantly unlocked in premium talent pipelines tailored precisely to your certified strengths.',
+<<<<<<< HEAD
+    icon: <ion-icon name="briefcase-outline" style={{ fontSize: '28px'}}></ion-icon>,
+=======
     icon: <ion-icon name="briefcase-outline"></ion-icon>,
+>>>>>>> 6cfd47ecda623bca2e51ba7f71b226834f5465f2
   },
 ]
 
