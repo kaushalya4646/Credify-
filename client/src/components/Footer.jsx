@@ -1,7 +1,30 @@
+import { Link } from 'react-router-dom'
+
 const columns = [
-  { title: 'Platform', links: ['Assessments', 'Verify Credentials', 'Success Stories'] },
-  { title: 'Employers', links: ['Talent Search', 'Enterprise Auditing', 'Request Demo'] },
-  { title: 'Company', links: ['About Us', 'Careers', 'Contact'] },
+  {
+    title: 'Platform',
+    links: [
+      { label: 'Assessments', path: '/assessments' },
+      { label: 'Verify Credentials', path: '/verify-credentials' },
+      { label: 'Success Stories', path: '/success-stories' },
+    ],
+  },
+  {
+    title: 'Employers',
+    links: [
+      { label: 'Talent Search', path: '/talent-search' },
+      { label: 'Enterprise Auditing', path: '/enterprise-auditing' },
+      { label: 'Request Demo', path: '/request-demo' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { label: 'About Us', path: '/about-us' },
+      { label: 'Careers', path: '/careers' },
+      { label: 'Contact', path: '/contact' },
+    ],
+  },
 ]
 
 export default function Footer() {
@@ -25,8 +48,8 @@ export default function Footer() {
                 </h4>
                 <ul className="mt-4 space-y-3">
                   {col.links.map((l) => (
-                    <li key={l}>
-                      <a href="#" className="text-sm text-slate-400 hover:text-white">{l}</a>
+                    <li key={l.label}>
+                      <Link to={l.path} className="text-sm text-slate-400 hover:text-white">{l.label}</Link>
                     </li>
                   ))}
                 </ul>
@@ -38,8 +61,8 @@ export default function Footer() {
         <div className="mt-12 flex flex-col gap-4 border-t border-slate-700 pt-6 text-sm text-slate-400 md:flex-row md:items-center md:justify-between">
           <p>© {new Date().getFullYear()} Credify Technologies, Inc. All rights reserved.</p>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-white">Privacy Policy</a>
-            <a href="#" className="hover:text-white">Terms of Service</a>
+            <Link to="/privacy-policy" className="hover:text-white">Privacy Policy</Link>
+            <Link to="/terms-of-service" className="hover:text-white">Terms of Service</Link>
           </div>
         </div>
       </div>
