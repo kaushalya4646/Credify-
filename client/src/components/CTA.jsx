@@ -19,12 +19,11 @@ export default function CTA() {
           >
             Get Started For Free
           </Link>
-          <a
-            href="#"
+          <Link to="/talk-to-sales"
             className="flex min-h-12 w-full items-center justify-center rounded-lg border border-white px-6 font-semibold text-white hover:bg-white/10 sm:w-auto"
           >
             Talk to Sales
-          </a>
+          </Link>
         </div>
       </div>
     </section>
