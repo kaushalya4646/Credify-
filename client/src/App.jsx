@@ -36,6 +36,19 @@ import AdminAssessmentEditorPage from './pages/AdminAssessmentEditorPage'
 import AdminVerificationRecordsPage from './pages/AdminVerificationRecordsPage'
 import AdminPlatformContentPage from './pages/AdminPlatformContentPage'
 
+// routes for pages in landing page(footer)
+import ContactPage from './pages/ContactPage'
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
+import TermsOfServicePage from './pages/TermsOfServicePage'
+import AboutUsPage from './pages/AboutUsPage'
+import CareersPage from './pages/CareersPage'
+import SuccessStoriesPage from './pages/SuccessStoriesPage'
+import TalentSearchPage from './pages/TalentSearchPage'
+import EnterpriseAuditingPage from './pages/EnterpriseAuditingPage'
+import RequestDemoPage from './pages/RequestDemoPage'
+import VerifyCredentialsPage from './pages/VerifyCredentialsPage'
+import AssessmentsOverviewPage from './pages/AssessmentsOverviewPage'
+
 export default function App() {
   return (
     <Routes>
@@ -81,6 +94,17 @@ export default function App() {
 
       <Route path="*" element={<NotFoundPage />} />
       
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+      <Route path="/about-us" element={<AboutUsPage />} />
+      <Route path="/careers" element={<CareersPage />} />
+      <Route path="/success-stories" element={<SuccessStoriesPage />} />
+      <Route path="/talent-search" element={<TalentSearchPage />} />
+      <Route path="/enterprise-auditing" element={<EnterpriseAuditingPage />} />
+      <Route path="/request-demo" element={<RequestDemoPage />} />
+      <Route path="/verify-credentials" element={<VerifyCredentialsPage />} />
+      <Route path="/assessments" element={<AssessmentsOverviewPage />} />
 
     </Routes>
   )
