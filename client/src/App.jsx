@@ -48,6 +48,7 @@ import EnterpriseAuditingPage from './pages/EnterpriseAuditingPage'
 import RequestDemoPage from './pages/RequestDemoPage'
 import VerifyCredentialsPage from './pages/VerifyCredentialsPage'
 import AssessmentsOverviewPage from './pages/AssessmentsOverviewPage'
+import TalkToSalesPage from './pages/TalkToSalesPage'
 
 export default function App() {
   return (
@@ -105,6 +106,7 @@ export default function App() {
       <Route path="/request-demo" element={<RequestDemoPage />} />
       <Route path="/verify-credentials" element={<VerifyCredentialsPage />} />
       <Route path="/assessments" element={<AssessmentsOverviewPage />} />
+      <Route path="/talk-to-sales" element={<TalkToSalesPage/>} />
 
     </Routes>
   )
