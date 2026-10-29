@@ -33,7 +33,6 @@ import CareerRoleDetailsPage from './pages/CareerRoleDetailsPage'
 import AssessmentInstructionsPage from './pages/AssessmentInstructionsPage'
 import MyJobsPage from './pages/MyJobsPage'
 import AdminAssessmentEditorPage from './pages/AdminAssessmentEditorPage'
-import AdminVerificationRecordsPage from './pages/AdminVerificationRecordsPage'
 import AdminPlatformContentPage from './pages/AdminPlatformContentPage'
 
 // routes for pages in landing page(footer)
@@ -90,7 +89,6 @@ export default function App() {
       <Route path="/recruiter/jobs" element={<MyJobsPage />} />
 
       <Route path="/admin/assessments/editor" element={<AdminAssessmentEditorPage />} />
-      <Route path="/admin/verification" element={<AdminVerificationRecordsPage />} />
       <Route path="/admin/content" element={<AdminPlatformContentPage />} />
 
       <Route path="*" element={<NotFoundPage />} />
