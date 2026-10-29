@@ -81,7 +81,7 @@ export default function AdminAssessmentsPage() {
             <h1 className="text-2xl font-semibold text-slate-900">Assessments</h1>
             <p className="text-sm text-slate-500 mt-1">Create, manage and monitor technical skill assessments.</p>
           </div>
-          <button className="px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">Create assessment</button>
+           <Link to='/admin-assessments-editor-page' className="px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">Create assessment</Link>
         </header>
 
         <main className="p-10 space-y-6">
