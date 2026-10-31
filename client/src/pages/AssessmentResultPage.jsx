@@ -11,7 +11,6 @@ const navItems = [
 const assessmentSubnav = [
   { label: 'Technical assessments', to: '/candidate/assessments' },
   { label: 'Assessment results', to: '/candidate/assessments/results' },
-  { label: 'Assessment screen', to: '/candidate/assessments/screen' },
 ]
 
 // TODO (backend step): replace every value below with this attempt's real result from the API.
