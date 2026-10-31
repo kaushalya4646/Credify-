@@ -10,17 +10,17 @@ const navItems = [
 
 // TODO (backend step): replace every array below with data from the API.
 const statCards = [
-  { label: 'Verified Skills', value: '14', sub: 'Skills backed by evidence' },
-  { label: 'Completed Assessments', value: '8', sub: 'Your assessment progress' },
-  { label: 'Skills Match', value: '85%', sub: 'Aligned with your career role', ring: 85 },
-  { label: 'Skill Gaps', value: '5', sub: 'Opportunities to grow' },
+  { label: 'Verified Skills', value: '14', sub: 'Skills backed by evidence', icon: 'shield-checkmark-outline' },
+  { label: 'Completed Assessments', value: '8', sub: 'Your assessment progress', icon: 'document-text-outline' },
+  { label: 'Skills Match', value: '85%', sub: 'Aligned with your career role', icon: 'speedometer-outline' },
+  { label: 'Skill Gaps', value: '5', sub: 'Opportunities to grow', icon: 'trending-up-outline' },
 ]
 
 const careerSkills = [
-  { name: 'React', level: 'Level IV', bg: '#E8F1FF', tag: '⚛' },
-  { name: 'JavaScript', level: 'Level IV', bg: '#FEF3C7', tag: 'JS' },
-  { name: 'CSS/HTML', level: 'Level IV', bg: '#FFE4D6', tag: '5' },
-  { name: 'Python', level: 'Level IV', bg: '#E0F2FE', tag: 'Py' },
+  { name: 'React', level: 'Level IV', bg: '#ffffff', icon: 'logo-react', color: '#61DBFB' },
+  { name: 'JavaScript', level: 'Level IV', bg: '#ffffff', icon: 'logo-javascript', color: '#CA8A04'  },
+  { name: 'CSS/HTML', level: 'Level IV', bg: '#ffffff', icon: 'logo-html5', color: '#EA580C' },
+  { name: 'Python', level: 'Level IV', bg: '#ffffff', icon: 'logo-python', color: '#0284C7' },
 ]
 
 const verificationSkills = [
@@ -42,9 +42,9 @@ const recentResults = [
 ]
 
 const recommendedActions = [
-  { title: 'Complete verified skill profile', link: 'Go to My Profile →', to: '/candidate/profile' },
-  { title: 'Take recommended React assessment', link: 'Start assessment →', to: '#' },
-  { title: 'Share profile with recruiters', link: 'Share profile →', to: '#' },
+  { title: 'Complete verified skill profile', link: 'Go to My Profile ›', to: '/candidate/profile' },
+  { title: 'Take recommended React assessment', link: 'Start assessment ›', to: '/candidate/assessments' },
+  { title: 'Share profile with recruiters', link: 'Share profile ›', to: '#' },
 ]
 
 export default function CandidateDashboardPage() {
@@ -159,7 +159,7 @@ export default function CandidateDashboardPage() {
             </div>
             <Link
               to="/candidate/profile"
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"
             >
               View My Profile
             </Link>
@@ -171,19 +171,7 @@ export default function CandidateDashboardPage() {
               <div key={s.label} className="rounded-xl border border-gray-200 bg-white p-5">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-500">{s.label}</p>
-                  {s.ring !== undefined ? (
-                    <div className="relative h-6 w-6">
-                      <svg viewBox="0 0 24 24" className="h-6 w-6 -rotate-90">
-                        <circle cx="12" cy="12" r="10" fill="none" stroke="#E5E7EB" strokeWidth="3" />
-                        <circle
-                          cx="12" cy="12" r="10" fill="none" stroke="#2563EB" strokeWidth="3"
-                          strokeDasharray={`${(s.ring / 100) * 62.8} 62.8`} strokeLinecap="round"
-                        />
-                      </svg>
-                    </div>
-                  ) : (
-                    <span className="text-gray-300">●</span>
-                  )}
+                  <ion-icon name={s.icon} class="text-gray-300" className="h-6 w-6"></ion-icon>
                 </div>
                 <p className="mt-2 text-3xl font-bold text-gray-900">{s.value}</p>
                 <p className="mt-1 text-xs text-gray-500">{s.sub}</p>
@@ -196,7 +184,7 @@ export default function CandidateDashboardPage() {
             <div className="rounded-xl border border-gray-200 bg-white p-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold text-gray-900">Current Career Role</h3>
-                <a href="#" className="text-sm font-semibold text-primary hover:underline">Change Role</a>
+                <Link to="/candidate/career-role" className="text-sm font-semibold text-primary hover:underline">Change Role ›</Link>
               </div>
 
               <div className="mt-4 flex items-center gap-3 border-b border-gray-200 pb-5">
@@ -214,13 +202,13 @@ export default function CandidateDashboardPage() {
                   <li key={s.name} className="flex items-center gap-3">
                     <span
                       className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold"
-                      style={{ backgroundColor: s.bg }}
+                      style={{ backgroundColor: s.bg, color: s.color }}
                     >
-                      {s.tag}
+                      <ion-icon name={s.icon} className="h-6 w-6 items-center"></ion-icon>
                     </span>
                     <span className="flex-1 text-sm font-medium text-gray-900">{s.name}</span>
                     <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2.5 py-1 text-xs font-semibold text-[#15803D]">
-                      ✓ {s.level}
+                      {s.level}
                     </span>
                   </li>
                 ))}
@@ -238,7 +226,9 @@ export default function CandidateDashboardPage() {
                       <span className="font-medium text-gray-900">{s.name}</span>
                       <div className="flex items-center gap-3">
                         {s.ok ? (
-                          <span className="flex items-center gap-1 text-xs font-medium text-[#15803D]">✓</span>
+                          <span className="rounded-full bg-[#E8F5EE] px-2.5 py-1 text-xs font-semibold text-[#15803D]">
+                            Verified
+                          </span>
                         ) : (
                           <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                             ⚠ Need verification
@@ -268,7 +258,7 @@ export default function CandidateDashboardPage() {
             <div className="flex items-center justify-between">
               <h3 className="text-base font-semibold text-gray-900">Recommended Assessments</h3>
               <Link to="/candidate/assessments" className="text-sm font-semibold text-primary hover:underline">
-                View all assessments →
+                View all assessments ›
               </Link>
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
@@ -279,7 +269,7 @@ export default function CandidateDashboardPage() {
                   </div>
                   <p className="mt-3 text-sm font-semibold text-gray-900">{a.name}</p>
                   <a href="#" className="mt-1 inline-block text-sm font-medium text-primary hover:underline">
-                    Start assessment →
+                    Start assessment ›
                   </a>
                 </div>
               ))}
@@ -291,8 +281,8 @@ export default function CandidateDashboardPage() {
             <div className="rounded-xl border border-gray-200 bg-white p-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold text-gray-900">Recent Results</h3>
-                <Link to="/candidate/assessments" className="text-sm font-semibold text-primary hover:underline">
-                  View all results →
+                <Link to="/candidate/assessments/results" className="text-sm font-semibold text-primary hover:underline">
+                  View all results ›
                 </Link>
               </div>
               <table className="mt-4 w-full text-left text-sm">
@@ -325,10 +315,7 @@ export default function CandidateDashboardPage() {
               <h3 className="text-base font-semibold text-gray-900">Recommended Actions</h3>
               <ul className="mt-4 space-y-4">
                 {recommendedActions.map((a) => (
-                  <li key={a.title} className="flex gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-primary">
-                      →
-                    </div>
+                  <li key={a.title} className="flex gap-3 border-b border-gray-200 pb-2">
                     <div>
                       <p className="text-sm font-medium text-gray-900">{a.title}</p>
                       <Link to={a.to} className="text-sm font-semibold text-primary hover:underline">
