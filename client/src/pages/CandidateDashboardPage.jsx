@@ -105,9 +105,7 @@ export default function CandidateDashboardPage() {
               <p className="text-xs text-gray-500">Candidate account</p>
             </div>
           </div>
-          <Link
-            to="/"
-           className="min-h-11 w-full rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <Link to="/" className="inline-flex min-h-11 items-center justify-center w-full rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
             Log out
           </Link>
         </div>
