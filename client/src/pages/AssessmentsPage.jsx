@@ -11,7 +11,7 @@ const navItems = [
 const assessmentSubnav = [
   { label: 'Technical assessments', to: '/candidate/assessments' },
   { label: 'Assessment results', to: '/candidate/assessments/results' },
-  { label: 'Assessment screen', to: '/candidate/assessments/screen' },
+ 
 ]
 
 const tabs = ['All', 'Recommended', 'Completed', 'Not started']
