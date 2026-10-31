@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
+
 const navItems = [
   { label: 'Dashboard', path: '/candidate/dashboard' },
   { label: 'Career Role', path: '/candidate/career-role' },

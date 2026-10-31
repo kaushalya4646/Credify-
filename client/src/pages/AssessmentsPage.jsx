@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 const navItems = [
   { label: 'Dashboard', to: '/candidate/dashboard' },
@@ -19,6 +19,7 @@ const tabs = ['All', 'Recommended', 'Completed', 'Not started']
 // TODO (backend step): replace with the candidate's real assessments from the API.
 const assessments = [
   {
+    id: 'java-programming',
     name: 'Java programming',
     desc: 'Test core Java, OOP and collections.',
     status: 'Not started',
@@ -27,20 +28,51 @@ const assessments = [
     action: 'Start assessment',
   },
   {
+    id: 'sql-database-fundamentals',
     name: 'SQL & database fundamentals',
     desc: 'Test queries, joins and database design.',
     status: 'Completed',
     tags: ['Intermediate', '25 mins', '15 questions'],
     icon: { bg: '#DCFCE7', fg: '#15803D', glyph: '🗄' },
     action: 'View results',
+    result: { score: 86, correct: 13, total: 15, time: '21 mins' },
   },
   {
+    id: 'rest-api-development',
     name: 'REST API development',
     desc: 'Test API design, HTTP methods and status codes.',
     status: 'Recommended',
     tags: ['Intermediate', '40 mins', '20 questions'],
     icon: { bg: '#DCFCE7', fg: '#15803D', glyph: '☁' },
     action: 'Start assessment',
+  },
+  {
+    id: 'python-fundamentals',
+    name: 'Python fundamentals',
+    desc: 'Test syntax, data structures and basic scripting.',
+    status: 'Not started',
+    tags: ['Beginner', '25 mins', '18 questions'],
+    icon: { bg: '#FEF3C7', fg: '#B45309', glyph: '🐍' },
+    action: 'Start assessment',
+  },
+  {
+    id: 'react-fundamentals',
+    name: 'React fundamentals',
+    desc: 'Test components, hooks and state management.',
+    status: 'Recommended',
+    tags: ['Intermediate', '35 mins', '20 questions'],
+    icon: { bg: '#EFF6FF', fg: '#2563EB', glyph: '⚛' },
+    action: 'Start assessment',
+  },
+  {
+    id: 'git-version-control',
+    name: 'Git & version control',
+    desc: 'Test branching, merging and collaboration workflows.',
+    status: 'Completed',
+    tags: ['Beginner', '20 mins', '12 questions'],
+    icon: { bg: '#DCFCE7', fg: '#15803D', glyph: '🔧' },
+    action: 'View results',
+    result: { score: 92, correct: 11, total: 12, time: '14 mins' },
   },
 ]
 
@@ -52,7 +84,9 @@ const statusStyles = {
 
 export default function AssessmentsPage() {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
   const [tab, setTab] = useState('All')
+  const [activeResult, setActiveResult] = useState(null)
 
   const visible = tab === 'All' ? assessments : assessments.filter((a) => a.status === tab)
 
@@ -87,7 +121,6 @@ export default function AssessmentsPage() {
             {navItems[1].label}
           </Link>
 
-          {/* Assessments, expanded with its sub-pages since this page lives under it */}
           <div className="rounded-lg px-3 py-2.5 text-sm font-semibold text-primary">Assessments</div>
           <div className="ml-3 space-y-1 border-l border-gray-200 pl-3">
             {assessmentSubnav.map((item) => {
@@ -209,7 +242,7 @@ export default function AssessmentsPage() {
           {/* Assessment cards */}
           <div className="grid gap-5 md:grid-cols-2">
             {visible.map((a) => (
-              <div key={a.name} className="rounded-xl border border-gray-200 bg-white p-6">
+              <div key={a.id} className="rounded-xl border border-gray-200 bg-white p-6">
                 <div className="flex items-start gap-3">
                   <span
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-xl"
@@ -237,6 +270,11 @@ export default function AssessmentsPage() {
                 </div>
 
                 <button
+                  onClick={() =>
+                    a.action === 'View results'
+                      ? setActiveResult(a)
+                      : navigate(`/candidate/assessments/${a.id}/screen`)
+                  }
                   className={`mt-5 min-h-12 w-full rounded-lg text-sm font-semibold ${
                     a.action === 'View results'
                       ? 'border border-primary text-primary hover:bg-blue-50'
@@ -255,6 +293,56 @@ export default function AssessmentsPage() {
           </div>
         </main>
       </div>
+
+      {/* Results modal */}
+      {activeResult && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setActiveResult(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">{activeResult.name}</h2>
+              <button
+                onClick={() => setActiveResult(null)}
+                className="text-gray-400 hover:text-gray-600"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-5 flex items-center justify-center">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-primary/20">
+                <span className="text-2xl font-bold text-primary">{activeResult.result.score}%</span>
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-4 text-center text-sm">
+              <div>
+                <p className="font-semibold text-gray-900">
+                  {activeResult.result.correct}/{activeResult.result.total}
+                </p>
+                <p className="text-xs text-gray-500">Correct answers</p>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-900">{activeResult.result.time}</p>
+                <p className="text-xs text-gray-500">Time taken</p>
+              </div>
+            </div>
+
+            <Link
+              to="/candidate/assessments/results"
+              className="mt-6 block min-h-11 w-full rounded-lg bg-primary text-center text-sm font-semibold leading-[44px] text-white hover:bg-primary-dark"
+            >
+              View full breakdown
+            </Link>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -62,7 +62,7 @@ export default function App() {
       <Route path="/candidate/assessments" element={<AssessmentsPage />} />
       <Route path="/candidate/assessments/results" element={<AssessmentResultPage />} />
       <Route path="/candidate/skill-gaps" element={<SkillGapsPage />} />
-      <Route path="/candidate/assessments/screen" element={<AssessmentScreenPage />} />
+      <Route path="/candidate/assessments/:id/screen" element={<AssessmentScreenPage />} />
 
       <Route path="/recruiter/dashboard" element={<RecruiterDashboardPage />} />
       <Route path="/recruiter/find-candidates" element={<FindCandidatesPage />} />
