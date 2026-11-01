@@ -55,6 +55,15 @@ function RecruiterSidebar() {
   )
 }
 
+// TODO (backend step): replace these with real option lists from the API.
+const jobTitleOptions = ['Backend Developer', 'Frontend Developer', 'Full Stack Developer', 'DevOps Engineer', 'QA Engineer', 'Data Analyst', 'Product Manager']
+const countryOptions = ['Sri Lanka', 'India', 'United States', 'United Kingdom', 'Australia', 'Germany', 'Singapore']
+const cityOptions = ['Colombo', 'Kandy', 'Galle', 'Jaffna', 'Negombo', 'Bangalore', 'London', 'Singapore']
+const experienceOptions = ['0 years', '1 year', '2 years', '3 years', '4 years', '5 years', '5+ years']
+const degreeOptions = ['BSc in Software Engineering', 'BSc in Computer Science', 'BEng in IT', 'BSc in Information Systems', 'MSc in Computer Science']
+const skillSuggestions = ['Java', 'Python', 'SQL', 'REST APIs', 'React', 'Node.js', 'Docker', 'AWS', 'TypeScript', 'MongoDB']
+const currencyOptions = ['LKR', 'USD', 'EUR', 'GBP']
+
 export default function CreateJobVacancyPage() {
   const [form, setForm] = useState({
     title: '',
@@ -65,8 +74,9 @@ export default function CreateJobVacancyPage() {
     experience: '',
     degree: '',
     university: '',
-    salaryLow: '',
-    salaryHigh: '',
+    currency: 'LKR',
+    salaryLow: 50000,
+    salaryHigh: 150000,
     deadline: '',
   })
   const [skills, setSkills] = useState([
@@ -76,6 +86,10 @@ export default function CreateJobVacancyPage() {
     { name: 'REST APIs', level: 'optional' },
   ])
   const [skillInput, setSkillInput] = useState('')
+
+  const SALARY_MIN = 0
+  const SALARY_MAX = 500000
+  const SALARY_STEP = 5000
 
   function updateField(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -91,11 +105,24 @@ export default function CreateJobVacancyPage() {
     setSkills((prev) => prev.map((s, i) => (i === index ? { ...s, level } : s)))
   }
 
+  function handleSalaryLowChange(value) {
+    const num = Math.min(Number(value), form.salaryHigh - SALARY_STEP)
+    updateField('salaryLow', num)
+  }
+
+  function handleSalaryHighChange(value) {
+    const num = Math.max(Number(value), form.salaryLow + SALARY_STEP)
+    updateField('salaryHigh', num)
+  }
+
   function handleSubmit(e) {
     e.preventDefault()
     // TODO: POST to /api/jobs with { ...form, skills }
     console.log('Create job vacancy payload:', { ...form, skills })
   }
+
+  const lowPct = ((form.salaryLow - SALARY_MIN) / (SALARY_MAX - SALARY_MIN)) * 100
+  const highPct = ((form.salaryHigh - SALARY_MIN) / (SALARY_MAX - SALARY_MIN)) * 100
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -113,11 +140,17 @@ export default function CreateJobVacancyPage() {
             <div>
               <label className="text-sm font-semibold text-slate-900 block mb-2">Job title</label>
               <input
+                list="job-title-options"
                 value={form.title}
                 onChange={(e) => updateField('title', e.target.value)}
                 placeholder="e.g. Backend Developer"
                 className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm"
               />
+              <datalist id="job-title-options">
+                {jobTitleOptions.map((o) => (
+                  <option key={o} value={o} />
+                ))}
+              </datalist>
             </div>
 
             <div>
@@ -154,40 +187,70 @@ export default function CreateJobVacancyPage() {
             <div>
               <label className="text-sm font-semibold text-slate-900 block mb-2">Location</label>
               <div className="grid grid-cols-2 gap-4">
-                <input
-                  value={form.country}
-                  onChange={(e) => updateField('country', e.target.value)}
-                  placeholder="Country"
-                  className="px-4 py-3 rounded-xl border border-slate-300 text-sm"
-                />
-                <input
-                  value={form.city}
-                  onChange={(e) => updateField('city', e.target.value)}
-                  placeholder="City"
-                  className="px-4 py-3 rounded-xl border border-slate-300 text-sm"
-                />
+                <div>
+                  <input
+                    list="country-options"
+                    value={form.country}
+                    onChange={(e) => updateField('country', e.target.value)}
+                    placeholder="Country"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm"
+                  />
+                  <datalist id="country-options">
+                    {countryOptions.map((o) => (
+                      <option key={o} value={o} />
+                    ))}
+                  </datalist>
+                </div>
+                <div>
+                  <input
+                    list="city-options"
+                    value={form.city}
+                    onChange={(e) => updateField('city', e.target.value)}
+                    placeholder="City"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm"
+                  />
+                  <datalist id="city-options">
+                    {cityOptions.map((o) => (
+                      <option key={o} value={o} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
             </div>
 
             <div>
               <label className="text-sm font-semibold text-slate-900 block mb-2">Experience in years</label>
               <input
+                list="experience-options"
                 value={form.experience}
                 onChange={(e) => updateField('experience', e.target.value)}
                 placeholder="2 years"
                 className="w-1/2 px-4 py-3 rounded-xl border border-slate-300 text-sm"
               />
+              <datalist id="experience-options">
+                {experienceOptions.map((o) => (
+                  <option key={o} value={o} />
+                ))}
+              </datalist>
             </div>
 
             <div>
               <label className="text-sm font-semibold text-slate-900 block mb-2">Education</label>
               <div className="grid grid-cols-2 gap-4">
-                <input
-                  value={form.degree}
-                  onChange={(e) => updateField('degree', e.target.value)}
-                  placeholder="Degree programme"
-                  className="px-4 py-3 rounded-xl border border-slate-300 text-sm"
-                />
+                <div>
+                  <input
+                    list="degree-options"
+                    value={form.degree}
+                    onChange={(e) => updateField('degree', e.target.value)}
+                    placeholder="Degree programme"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 text-sm"
+                  />
+                  <datalist id="degree-options">
+                    {degreeOptions.map((o) => (
+                      <option key={o} value={o} />
+                    ))}
+                  </datalist>
+                </div>
                 <input
                   value={form.university}
                   onChange={(e) => updateField('university', e.target.value)}
@@ -203,12 +266,18 @@ export default function CreateJobVacancyPage() {
               <h2 className="font-medium text-slate-900 mb-4">Required skills</h2>
               <div className="flex gap-2 mb-4">
                 <input
+                  list="skill-options"
                   value={skillInput}
                   onChange={(e) => setSkillInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
                   placeholder="Add technical skill…"
                   className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
                 />
+                <datalist id="skill-options">
+                  {skillSuggestions.map((o) => (
+                    <option key={o} value={o} />
+                  ))}
+                </datalist>
                 <button type="button" onClick={addSkill} className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">
                   Add
                 </button>
@@ -243,20 +312,47 @@ export default function CreateJobVacancyPage() {
             <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
               <h2 className="font-medium text-slate-900">Additional details</h2>
               <div>
-                <label className="text-sm font-semibold text-slate-900 block mb-2">Salary range</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    value={form.salaryLow}
-                    onChange={(e) => updateField('salaryLow', e.target.value)}
-                    placeholder="Low"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-semibold text-slate-900">Salary range</label>
+                  <select
+                    value={form.currency}
+                    onChange={(e) => updateField('currency', e.target.value)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700"
+                  >
+                    {currencyOptions.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between text-sm font-semibold text-slate-900 mb-3">
+                  <span>{form.currency} {form.salaryLow.toLocaleString()}</span>
+                  <span>{form.currency} {form.salaryHigh.toLocaleString()}</span>
+                </div>
+
+                <div className="relative h-6 flex items-center">
+                  <div className="absolute w-full h-1.5 rounded-full bg-slate-200" />
+                  <div
+                    className="absolute h-1.5 rounded-full bg-primary"
+                    style={{ left: `${lowPct}%`, width: `${highPct - lowPct}%` }}
                   />
-                  <span className="text-slate-400">–</span>
                   <input
+                    type="range"
+                    min={SALARY_MIN}
+                    max={SALARY_MAX}
+                    step={SALARY_STEP}
+                    value={form.salaryLow}
+                    onChange={(e) => handleSalaryLowChange(e.target.value)}
+                    className="absolute w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white"
+                  />
+                  <input
+                    type="range"
+                    min={SALARY_MIN}
+                    max={SALARY_MAX}
+                    step={SALARY_STEP}
                     value={form.salaryHigh}
-                    onChange={(e) => updateField('salaryHigh', e.target.value)}
-                    placeholder="High"
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+                    onChange={(e) => handleSalaryHighChange(e.target.value)}
+                    className="absolute w-full appearance-none bg-transparent pointer-events-none [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:shadow [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white"
                   />
                 </div>
               </div>
