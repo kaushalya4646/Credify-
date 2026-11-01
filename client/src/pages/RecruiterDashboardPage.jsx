@@ -90,7 +90,7 @@ export default function RecruiterDashboardPage() {
               <div className="bg-white rounded-2xl border border-slate-200 p-6">
                 <p className="text-sm text-slate-500 mb-2">Active jobs</p>
                 <p className="text-3xl font-bold text-slate-900">12</p>
-                <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">↑ 14.2%</span>
+                <p className="text-xs text-green-700 font-semibold mt-2">↑ 14.2%</p>
               </div>
               <div className="bg-white rounded-2xl border border-slate-200 p-6">
                 <p className="text-sm text-slate-500 mb-2">Applications</p>

@@ -1,4 +1,3 @@
-// src/pages/FindCandidatesPage.jsx
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
@@ -61,6 +60,28 @@ function RecruiterSidebar() {
   )
 }
 
+function Modal({ title, onClose, children }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 const filters = ['Career role', 'Technical skills', 'Verified skills', 'Experience', 'Assessment score', 'Education']
 
 const verifiedSkills = [
@@ -72,17 +93,28 @@ const verifiedSkills = [
 
 const candidateId = '1' // TODO: replace with the real candidate's id once this page uses live data
 
+// TODO (backend step): replace with real candidates matching the recruiter's filters/search.
+const otherCandidates = [
+  { id: '2', name: 'Raveen Caldera', role: 'DevOps Engineer', match: 88, skills: ['Docker', 'CI/CD', 'AWS'], experience: '3 years' },
+  { id: '3', name: 'Amara Perera', role: 'Frontend Engineer', match: 91, skills: ['React', 'CSS', 'TypeScript'], experience: '2 years' },
+  { id: '4', name: 'Nadun Fernando', role: 'Backend Developer', match: 85, skills: ['Java', 'Spring Boot', 'SQL'], experience: '4 years' },
+  { id: '5', name: 'Ishara Wickrama', role: 'Full Stack Developer', match: 79, skills: ['Node.js', 'React', 'MongoDB'], experience: '2 years' },
+]
+
 export default function FindCandidatesPage() {
   const [searchText, setSearchText] = useState('')
   const [activeFilter, setActiveFilter] = useState('Career role')
+  const [exploreOpen, setExploreOpen] = useState(false)
 
   return (
     <div className="min-h-screen bg-slate-50">
       <RecruiterSidebar />
       <div className="ml-60">
-        <header className="bg-white border-b border-slate-200 px-10 spy-7">
-          <h1 className="text-2xl font-semibold text-slate-900">Find Candidates</h1>
-          <p className="text-sm text-slate-500 mt-1">Search verified candidates by skills, role or keywords</p>
+        <header className="bg-white border-b border-slate-200 px-10 py-7 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Find Candidates</h1>
+            <p className="text-sm text-slate-500 mt-1">Search verified candidates by skills, role or keywords</p>
+          </div>
         </header>
 
         <main className="p-10">
@@ -180,13 +212,63 @@ export default function FindCandidatesPage() {
               >
                 View full profile
               </Link>
-              <button className="flex-1 py-3.5 rounded-xl bg-blue-50 border border-blue-100 text-primary font-semibold text-sm">
+              <button
+                onClick={() => setExploreOpen(true)}
+                className="flex-1 py-3.5 rounded-xl bg-blue-50 border border-blue-100 text-primary font-semibold text-sm"
+              >
                 Explore other candidates
               </button>
             </div>
           </div>
         </main>
       </div>
+
+      {/* Explore other candidates modal */}
+      {exploreOpen && (
+        <Modal title="Other matching candidates" onClose={() => setExploreOpen(false)}>
+          <p className="text-sm text-slate-500 mb-5">
+            Based on your current search and filters, here are other candidates that match your requirements.
+          </p>
+          <div className="space-y-3">
+            {otherCandidates.map((c) => (
+              <div
+                key={c.id}
+                className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-12 h-12 shrink-0 rounded-full bg-blue-50 flex items-center justify-center font-semibold text-primary">
+                    {c.name.split(' ').map((n) => n[0]).join('')}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 truncate">{c.name}</p>
+                    <p className="text-xs text-slate-500">{c.role} · {c.experience}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {c.skills.map((s) => (
+                        <span key={s} className="px-2 py-0.5 rounded-full bg-slate-100 text-[11px] font-medium text-slate-600">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 shrink-0">
+                  <div className="text-center">
+                    <p className="font-bold text-green-700">{c.match}%</p>
+                    <p className="text-[11px] text-slate-500">Match</p>
+                  </div>
+                  <Link
+                    to={`/recruiter/candidates/${c.id}`}
+                    onClick={() => setExploreOpen(false)}
+                    className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-dark whitespace-nowrap"
+                  >
+                    View profile
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
