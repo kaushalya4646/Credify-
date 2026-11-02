@@ -63,16 +63,107 @@ function AdminSidebar() {
   )
 }
 
-const users = [
-  { initials: 'NS', name: 'Nisha Saduni', email: 'saduni34@gmail.com', type: 'Candidate', role: 'Backend developer', registered: '05/07/2026' },
-  { initials: 'RN', name: 'Raj Nazeer', email: 'rajnazeer@gmail.com', type: 'Recruiter', role: 'IT recruiter', registered: '06/07/2026' },
-  { initials: 'PK', name: 'Pethum Kamal', email: 'kamalpathum@gmail.com', type: 'Candidate', role: 'Backend developer', registered: '08/08/2026' },
-  { initials: 'SS', name: 'Saku Seya', email: 'sakuseya@gmail.com', type: 'Recruiter', role: 'IT recruiter', registered: '09/08/2026' },
-  { initials: 'NS', name: 'Nimal Sadun', email: 'nimalsadun@gmail.com', type: 'Recruiter', role: 'IT recruiter', registered: '19/09/2026' },
+function Modal({ title, onClose, children }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+          <button onClick={onClose} aria-label="Close" className="text-slate-400 hover:text-slate-600">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// TODO (backend step): replace with real users from the API.
+const initialUsers = [
+  { initials: 'NS', name: 'Nisha Saduni', email: 'saduni34@gmail.com', type: 'Candidate', role: 'Backend developer', registered: '05/07/2026', status: 'Active', verified: true },
+  { initials: 'RN', name: 'Raj Nazeer', email: 'rajnazeer@gmail.com', type: 'Recruiter', role: 'IT recruiter', registered: '06/07/2026', status: 'Active', verified: true },
+  { initials: 'PK', name: 'Pethum Kamal', email: 'kamalpathum@gmail.com', type: 'Candidate', role: 'Backend developer', registered: '08/08/2026', status: 'Active', verified: true },
+  { initials: 'SS', name: 'Saku Seya', email: 'sakuseya@gmail.com', type: 'Recruiter', role: 'IT recruiter', registered: '09/08/2026', status: 'Active', verified: true },
+  { initials: 'NS', name: 'Nimal Sadun', email: 'nimalsadun@gmail.com', type: 'Recruiter', role: 'IT recruiter', registered: '19/09/2026', status: 'Active', verified: true },
 ]
 
+const registrationDateOptions = ['Registration date', 'Last 7 days', 'Last 30 days', 'Last 90 days', 'This year']
+
+function parseRegisteredDate(str) {
+  // format is DD/MM/YYYY
+  const [day, month, year] = str.split('/').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function matchesRegistrationDate(registered, filterValue, today) {
+  if (filterValue === 'Registration date') return true
+  const date = parseRegisteredDate(registered)
+  const diffDays = (today - date) / (1000 * 60 * 60 * 24)
+  if (filterValue === 'Last 7 days') return diffDays <= 7
+  if (filterValue === 'Last 30 days') return diffDays <= 30
+  if (filterValue === 'Last 90 days') return diffDays <= 90
+  if (filterValue === 'This year') return date.getFullYear() === today.getFullYear()
+  return true
+}
+
 export default function AdminUsersPage() {
+  const [users, setUsers] = useState(initialUsers)
   const [searchText, setSearchText] = useState('')
+  const [userType, setUserType] = useState('User type')
+  const [accountStatus, setAccountStatus] = useState('Account status')
+  const [registrationDate, setRegistrationDate] = useState('Registration date')
+  const [openMenuIndex, setOpenMenuIndex] = useState(null)
+  const [editingUser, setEditingUser] = useState(null)
+  const [deletingUser, setDeletingUser] = useState(null)
+
+  const today = new Date()
+
+  const filteredUsers = users.filter((u) => {
+    if (searchText && !u.name.toLowerCase().includes(searchText.toLowerCase()) && !u.email.toLowerCase().includes(searchText.toLowerCase())) return false
+    if (userType !== 'User type' && u.type !== userType) return false
+    if (accountStatus !== 'Account status' && u.status !== accountStatus) return false
+    if (!matchesRegistrationDate(u.registered, registrationDate, today)) return false
+    return true
+  })
+
+  function toggleMenu(index) {
+    setOpenMenuIndex((prev) => (prev === index ? null : index))
+  }
+
+  function toggleSuspend(index) {
+    setUsers((prev) =>
+      prev.map((u, i) => (i === index ? { ...u, status: u.status === 'Active' ? 'Suspended' : 'Active' } : u))
+    )
+    setOpenMenuIndex(null)
+  }
+
+  function resetPassword(user) {
+    setOpenMenuIndex(null)
+    alert(`Password reset link sent to ${user.email}`)
+  }
+
+  function viewDetails(user) {
+    setOpenMenuIndex(null)
+    alert(`Viewing details for ${user.name}\nEmail: ${user.email}\nType: ${user.type}\nRole: ${user.role}`)
+  }
+
+  function saveEdit(e) {
+    e.preventDefault()
+    setUsers((prev) => prev.map((u, i) => (i === editingUser.index ? { ...editingUser.data } : u)))
+    setEditingUser(null)
+  }
+
+  function confirmDelete() {
+    setUsers((prev) => prev.filter((_, i) => i !== deletingUser.index))
+    setDeletingUser(null)
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -116,19 +207,33 @@ export default function AdminUsersPage() {
                 placeholder="Search users"
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
               />
-              <select className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
+              <select
+                value={userType}
+                onChange={(e) => setUserType(e.target.value)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+              >
                 <option>User type</option>
                 <option>Candidate</option>
                 <option>Recruiter</option>
                 <option>Admin</option>
               </select>
-              <select className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
+              <select
+                value={accountStatus}
+                onChange={(e) => setAccountStatus(e.target.value)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+              >
                 <option>Account status</option>
                 <option>Active</option>
                 <option>Suspended</option>
               </select>
-              <select className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
-                <option>Registration date</option>
+              <select
+                value={registrationDate}
+                onChange={(e) => setRegistrationDate(e.target.value)}
+                className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+              >
+                {registrationDateOptions.map((o) => (
+                  <option key={o}>{o}</option>
+                ))}
               </select>
             </div>
 
@@ -146,7 +251,7 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {users.map((u, i) => (
+                {filteredUsers.map((u, i) => (
                   <tr key={u.email + i} className="border-t border-slate-100">
                     <td className="py-3 flex items-center gap-2 font-semibold text-slate-900">
                       <span className="w-7 h-7 rounded-full bg-blue-50 text-primary text-[10px] font-semibold flex items-center justify-center">{u.initials}</span>
@@ -155,24 +260,158 @@ export default function AdminUsersPage() {
                     <td className="text-slate-600">{u.email}</td>
                     <td className="text-slate-900">{u.type}</td>
                     <td className="text-slate-600">{u.role}</td>
-                    <td><span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">✓ Verified</span></td>
-                    <td><span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">Active</span></td>
-                    <td className="text-slate-600">{u.registered}</td>
                     <td>
+                      <span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                        {u.verified ? '✓ Verified' : 'Unverified'}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          u.status === 'Active' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+                        }`}
+                      >
+                        {u.status}
+                      </span>
+                    </td>
+                    <td className="text-slate-600">{u.registered}</td>
+                    <td className="relative">
                       <div className="flex gap-2 text-slate-400">
-                        <button>⋯</button>
-                        <button className="text-primary">✎</button>
-                        <button className="text-red-600">✕</button>
+                        <button onClick={() => toggleMenu(i)} className="hover:text-slate-600">⋯</button>
+                        <button
+                          onClick={() => setEditingUser({ index: i, data: { ...u } })}
+                          className="text-primary hover:text-primary-dark"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          onClick={() => setDeletingUser({ index: i, name: u.name })}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          ✕
+                        </button>
                       </div>
+
+                      {openMenuIndex === i && (
+                        <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
+                          <button
+                            onClick={() => viewDetails(u)}
+                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                          >
+                            View details
+                          </button>
+                          <button
+                            onClick={() => toggleSuspend(i)}
+                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                          >
+                            {u.status === 'Active' ? 'Suspend account' : 'Activate account'}
+                          </button>
+                          <button
+                            onClick={() => resetPassword(u)}
+                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                          >
+                            Reset password
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
+                {filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-sm text-slate-500">
+                      No users match these filters.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
-            <p className="text-xs text-slate-500 mt-4">Showing {users.length} of 2,486 users</p>
+            <p className="text-xs text-slate-500 mt-4">Showing {filteredUsers.length} of 2,486 users</p>
           </div>
         </main>
       </div>
+
+      {/* Edit user modal */}
+      {editingUser && (
+        <Modal title={`Edit ${editingUser.data.name}`} onClose={() => setEditingUser(null)}>
+          <form onSubmit={saveEdit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Full name</label>
+              <input
+                value={editingUser.data.name}
+                onChange={(e) => setEditingUser((prev) => ({ ...prev, data: { ...prev.data, name: e.target.value } }))}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Email</label>
+              <input
+                type="email"
+                value={editingUser.data.email}
+                onChange={(e) => setEditingUser((prev) => ({ ...prev, data: { ...prev.data, email: e.target.value } }))}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Account type</label>
+              <select
+                value={editingUser.data.type}
+                onChange={(e) => setEditingUser((prev) => ({ ...prev, data: { ...prev.data, type: e.target.value } }))}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+              >
+                <option>Candidate</option>
+                <option>Recruiter</option>
+                <option>Admin</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Career role</label>
+              <input
+                value={editingUser.data.role}
+                onChange={(e) => setEditingUser((prev) => ({ ...prev, data: { ...prev.data, role: e.target.value } }))}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Status</label>
+              <select
+                value={editingUser.data.status}
+                onChange={(e) => setEditingUser((prev) => ({ ...prev, data: { ...prev.data, status: e.target.value } }))}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+              >
+                <option>Active</option>
+                <option>Suspended</option>
+              </select>
+            </div>
+            <button type="submit" className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark">
+              Save changes
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deletingUser && (
+        <Modal title="Remove user" onClose={() => setDeletingUser(null)}>
+          <p className="text-sm text-slate-600 mb-5">
+            Are you sure you want to remove <span className="font-semibold text-slate-900">{deletingUser.name}</span> from the platform? This cannot be undone.
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setDeletingUser(null)}
+              className="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmDelete}
+              className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+            >
+              Remove user
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
