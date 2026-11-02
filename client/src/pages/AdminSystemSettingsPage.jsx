@@ -157,23 +157,15 @@ export default function AdminSystemSettingsPage() {
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-300 text-sm resize-none"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-semibold text-slate-900 block mb-2">
-                    Default language
-                  </label>
-                  <select className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
-                    <option>English</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-semibold text-slate-900 block mb-2">
-                    Time zone
-                  </label>
-                  <select className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
-                    <option>UTC+05:30 Colombo</option>
-                  </select>
-                </div>
+              <div>
+                <label className="text-sm font-semibold text-slate-900 block mb-2">
+                  Default language
+                </label>
+                <select className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+                  <option value="en-US">English (United States)</option>
+                  <option value="en-GB">English (United Kingdom)</option>
+                  <option value="en-AU">English (Australia)</option>
+                </select>
               </div>
             </div>
 
@@ -230,7 +222,8 @@ export default function AdminSystemSettingsPage() {
                     className="w-1/2 px-3 py-2.5 rounded-xl border border-slate-300 text-sm"
                   />
                   <select className="w-1/2 px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
-                    <option>Minutes</option>
+                    <option>minutes</option>
+                    <option>hours</option>
                   </select>
                 </div>
               </div>
@@ -239,7 +232,10 @@ export default function AdminSystemSettingsPage() {
                   Maximum attempts
                 </label>
                 <input
-                  defaultValue="1"
+                  type="number"
+                  defaultValue={1}
+                  min={1}
+                  max={3}
                   className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm"
                 />
               </div>
@@ -247,10 +243,18 @@ export default function AdminSystemSettingsPage() {
                 <label className="text-sm font-semibold text-slate-900 block mb-2">
                   Passing score
                 </label>
-                <input
-                  defaultValue="50%"
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm"
-                />
+                <div className="relative">
+                  <input
+                    defaultValue={50}
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full pl-3 pr-9 py-2.5 rounded-xl border border-slate-300 text-sm"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500">
+                    %
+                  </span>
+                </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-900">
@@ -280,6 +284,9 @@ export default function AdminSystemSettingsPage() {
                   />
                   <select className="w-1/2 px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
                     <option>Days</option>
+                    <option>Weeks</option>
+                    <option>Months</option>
+                    <option>Years</option>
                   </select>
                 </div>
               </div>
@@ -289,6 +296,8 @@ export default function AdminSystemSettingsPage() {
                 </label>
                 <select className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
                   <option>Allowed</option>
+                  <option>Not allowed</option>
+                  <option>Admin approval required</option>
                 </select>
               </div>
               <div>
@@ -296,7 +305,11 @@ export default function AdminSystemSettingsPage() {
                   Minimum score for verification
                 </label>
                 <select className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+                  <option>30%</option>
+                  <option>40%</option>
                   <option>50%</option>
+                  <option>60%</option>
+                  <option>70%</option>
                 </select>
               </div>
             </div>
@@ -316,7 +329,12 @@ export default function AdminSystemSettingsPage() {
                   Session timeout
                 </label>
                 <select className="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
+                  <option>15 minutes</option>
                   <option>30 minutes</option>
+                  <option>1 hour</option>
+                  <option>2 hours</option>
+                  <option>4 hours</option>
+                  <option>24 hours</option>
                 </select>
               </div>
               <div>
@@ -330,6 +348,9 @@ export default function AdminSystemSettingsPage() {
                   />
                   <select className="w-1/2 px-3 py-2.5 rounded-xl border border-slate-300 text-sm">
                     <option>Days</option>
+                    <option>Weeks</option>
+                    <option>Months</option>
+                    <option>Years</option>
                   </select>
                 </div>
               </div>
