@@ -197,14 +197,11 @@ export default function CandidateProfilePage() {
                 to={item.to}
                 className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium ${
                   active
-                    ? "bg-blue-50 text-primary"
+                    ? "text-primary"
                     : "text-gray-600 hover:bg-gray-50"
                 }`}
               >
                 {item.label}
-                {active && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                )}
               </Link>
             );
           })}
