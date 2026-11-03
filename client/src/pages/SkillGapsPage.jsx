@@ -70,7 +70,7 @@ export default function SkillGapsPage() {
   return (
     <div className="flex min-h-screen bg-[#F5F7FB]">
       {/* Sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:flex">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:flex lg:overflow-y-auto">
         <Link to="/" className="flex items-center gap-2 px-2">
           <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
             <rect width="32" height="32" rx="8" fill="#2563EB" />
@@ -92,11 +92,10 @@ export default function SkillGapsPage() {
                 key={item.label}
                 to={item.to}
                 className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium ${
-                  active ? 'bg-blue-50 text-primary' : 'text-gray-600 hover:bg-gray-50'
+                  active ? 'text-primary' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 {item.label}
-                {active && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
               </Link>
             )
           })}
@@ -129,7 +128,7 @@ export default function SkillGapsPage() {
       </aside>
 
       {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col lg:ml-60">
         <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 lg:px-10">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">Your skill gap analysis</h1>
