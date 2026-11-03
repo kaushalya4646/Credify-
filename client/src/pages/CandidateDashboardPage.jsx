@@ -53,7 +53,11 @@ export default function CandidateDashboardPage() {
   return (
     <div className="flex min-h-screen bg-[#F5F7FB]">
       {/* Sidebar */}
+<<<<<<< HEAD
       <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:flex lg:overflow-y-auto">
+=======
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:flex">
+>>>>>>> parent of 5976e00 (Merge branch 'CandidateDashboardPage' into dev)
         <Link to="/" className="flex items-center gap-2 px-2">
           <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
             <rect width="32" height="32" rx="8" fill="#2563EB" />
