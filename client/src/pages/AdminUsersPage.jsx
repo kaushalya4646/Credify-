@@ -33,9 +33,12 @@ function AdminSidebar() {
             <Link
               key={item.path}
               to={item.path}
+              
               className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium ${
-                active ? 'bg-blue-50 text-primary font-semibold' : 'text-slate-600 hover:bg-slate-50'
+                active ? 'text-primary font-semibold' : 'text-slate-600 hover:bg-slate-50'
               }`}
+
+
             >
               {item.label}
             </Link>
