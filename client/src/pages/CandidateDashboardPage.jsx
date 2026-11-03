@@ -20,7 +20,7 @@ const careerSkills = [
   { name: 'React', level: 'Level IV', bg: '#ffffff', icon: 'logo-react', color: '#61DBFB' },
   { name: 'JavaScript', level: 'Level IV', bg: '#ffffff', icon: 'logo-javascript', color: '#CA8A04'  },
   { name: 'CSS/HTML', level: 'Level IV', bg: '#ffffff', icon: 'logo-html5', color: '#EA580C' },
-  { name: 'Python', level: 'Level IV', bg: '#ffffff', icon: 'logo-python', color: '#0284C7' },
+  { name: 'Python', level: 'Level IV', bg: '#ffffff', icon: 'logo-python', color: 'rgb(2, 132, 199)' },
 ]
 
 const verificationSkills = [
@@ -54,10 +54,14 @@ export default function CandidateDashboardPage() {
     <div className="flex min-h-screen bg-[#F5F7FB]">
       {/* Sidebar */}
 <<<<<<< HEAD
+<<<<<<< HEAD
       <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:flex lg:overflow-y-auto">
 =======
       <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:flex">
 >>>>>>> parent of 5976e00 (Merge branch 'CandidateDashboardPage' into dev)
+=======
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:flex">
+>>>>>>> CandidateDashboardPage
         <Link to="/" className="flex items-center gap-2 px-2">
           <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
             <rect width="32" height="32" rx="8" fill="#2563EB" />
