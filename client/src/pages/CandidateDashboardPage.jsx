@@ -53,7 +53,7 @@ export default function CandidateDashboardPage() {
   return (
     <div className="flex min-h-screen bg-[#F5F7FB]">
       {/* Sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:flex lg:left-0 lg:top-0 lg:h-screen lg:flex lg:overflow-y-auto">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:flex">
         <Link to="/" className="flex items-center gap-2 px-2">
           <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
             <rect width="32" height="32" rx="8" fill="#2563EB" />
@@ -112,7 +112,7 @@ export default function CandidateDashboardPage() {
       </aside>
 
       {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col lg:ml-60">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
         <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 lg:px-10">
           <div>
