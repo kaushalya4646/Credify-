@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 
-
 const navItems = [
   { label: 'Dashboard', path: '/candidate/dashboard' },
   { label: 'Career Role', path: '/candidate/career-role' },
@@ -157,7 +156,7 @@ function CandidateSidebar({ activeId }) {
               <Link
                 to={item.path}
                 className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium ${
-                  active || (isAssessments && assessmentsExpanded) ? 'bg-blue-50 text-primary font-semibold' : 'text-slate-600 hover:bg-slate-50'
+                  active || (isAssessments && assessmentsExpanded) ? 'text-primary font-semibold' : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 {item.label}
@@ -181,18 +180,6 @@ function CandidateSidebar({ activeId }) {
           )
         })}
       </nav>
-      <div className="mx-4 mb-4 rounded-2xl bg-slate-50 p-4">
-        <p className="text-sm font-semibold text-slate-900">Here to help you grow</p>
-        <p className="text-xs text-slate-500 mt-2">Get help with your profile, skills and assessments.</p>
-        <a href="#" className="text-xs font-medium text-primary mt-3 inline-block">Visit help center ↗</a>
-      </div>
-      <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-xs font-semibold text-primary">CS</div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-900 truncate">Chethina Sri</p>
-          <p className="text-xs text-slate-500">Candidate account</p>
-        </div>
-      </div>
     </aside>
   )
 }
