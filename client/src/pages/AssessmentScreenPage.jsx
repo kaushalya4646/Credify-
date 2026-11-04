@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 
 const navItems = [
   { label: 'Dashboard', path: '/candidate/dashboard' },
@@ -9,14 +9,131 @@ const navItems = [
   { label: 'My Profile', path: '/candidate/profile' },
 ]
 
-const subNav = [
-  { label: 'Technical assessments', path: '/candidate/assessments' },
-  { label: 'Assessment results', path: '/candidate/assessments/results' },
-  { label: 'Assessment screen', path: '/candidate/assessments/screen' },
-]
+// TODO (backend step): replace this whole bank with the real question sets fetched per assessment id.
+const assessmentBank = {
+  'java-programming': {
+    title: 'Java Programming Assessment',
+    level: 'Elementary',
+    totalQuestions: 20,
+    timeLimit: '30:00',
+    questions: [
+      {
+        text: 'Which concept allows a class to acquire properties and methods from another class?',
+        options: ['Encapsulation', 'Inheritance', 'Abstraction', 'Polymorphism'],
+        correct: 1,
+      },
+      {
+        text: 'What keyword is used to inherit a class in Java?',
+        options: ['implements', 'extends', 'inherits', 'super'],
+        correct: 1,
+      },
+    ],
+  },
+  'sql-database-fundamentals': {
+    title: 'SQL & Database Fundamentals Assessment',
+    level: 'Intermediate',
+    totalQuestions: 15,
+    timeLimit: '25:00',
+    questions: [
+      {
+        text: 'Which SQL clause is used to filter rows after grouping?',
+        options: ['WHERE', 'HAVING', 'GROUP BY', 'ORDER BY'],
+        correct: 1,
+      },
+      {
+        text: 'Which type of join returns only matching rows from both tables?',
+        options: ['LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'FULL OUTER JOIN'],
+        correct: 2,
+      },
+    ],
+  },
+  'rest-api-development': {
+    title: 'REST API Development Assessment',
+    level: 'Intermediate',
+    totalQuestions: 20,
+    timeLimit: '40:00',
+    questions: [
+      {
+        text: 'Which HTTP method is idempotent and used to fully replace a resource?',
+        options: ['POST', 'PUT', 'PATCH', 'GET'],
+        correct: 1,
+      },
+      {
+        text: 'Which status code indicates a successfully created resource?',
+        options: ['200', '201', '204', '301'],
+        correct: 1,
+      },
+    ],
+  },
+  'python-fundamentals': {
+    title: 'Python Fundamentals Assessment',
+    level: 'Beginner',
+    totalQuestions: 18,
+    timeLimit: '25:00',
+    questions: [
+      {
+        text: 'Which data type is immutable in Python?',
+        options: ['List', 'Dictionary', 'Tuple', 'Set'],
+        correct: 2,
+      },
+      {
+        text: 'What does the len() function return for a string?',
+        options: ['Its memory address', 'Its character count', 'Its data type', 'Its index'],
+        correct: 1,
+      },
+    ],
+  },
+  'react-fundamentals': {
+    title: 'React Fundamentals Assessment',
+    level: 'Intermediate',
+    totalQuestions: 20,
+    timeLimit: '35:00',
+    questions: [
+      {
+        text: 'Which hook is used to manage local state in a function component?',
+        options: ['useEffect', 'useState', 'useRef', 'useMemo'],
+        correct: 1,
+      },
+      {
+        text: 'What do you call a function passed as a prop to render custom content?',
+        options: ['A reducer', 'A render prop', 'A context', 'A hook'],
+        correct: 1,
+      },
+    ],
+  },
+  'git-version-control': {
+    title: 'Git & Version Control Assessment',
+    level: 'Beginner',
+    totalQuestions: 12,
+    timeLimit: '20:00',
+    questions: [
+      {
+        text: 'Which command creates a new branch and switches to it in one step?',
+        options: ['git branch', 'git switch -c', 'git merge', 'git clone'],
+        correct: 1,
+      },
+      {
+        text: 'What does "git pull" do?',
+        options: [
+          'Uploads local commits',
+          'Fetches and merges remote changes',
+          'Deletes a branch',
+          'Creates a new repository',
+        ],
+        correct: 1,
+      },
+    ],
+  },
+}
 
-function CandidateSidebar() {
+function CandidateSidebar({ activeId }) {
   const location = useLocation()
+  const subNav = [
+    { label: 'Technical assessments', path: '/candidate/assessments' },
+    { label: 'Assessment results', path: '/candidate/assessments/results' },
+    { label: 'Assessment screen', path: `/candidate/assessments/${activeId}/screen` },
+  ]
+
   return (
     <aside className="fixed left-0 top-0 h-screen w-60 bg-white border-r border-slate-200 flex flex-col">
       <div className="px-6 pt-8 pb-6 flex items-center gap-3">
@@ -39,7 +156,7 @@ function CandidateSidebar() {
               <Link
                 to={item.path}
                 className={`flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium ${
-                  active || (isAssessments && assessmentsExpanded) ? 'bg-blue-50 text-primary font-semibold' : 'text-slate-600 hover:bg-slate-50'
+                  active || (isAssessments && assessmentsExpanded) ? 'text-primary font-semibold' : 'text-slate-600 hover:bg-slate-50'
                 }`}
               >
                 {item.label}
@@ -63,36 +180,34 @@ function CandidateSidebar() {
           )
         })}
       </nav>
-      <div className="mx-4 mb-4 rounded-2xl bg-slate-50 p-4">
-        <p className="text-sm font-semibold text-slate-900">Here to help you grow</p>
-        <p className="text-xs text-slate-500 mt-2">Get help with your profile, skills and assessments.</p>
-        <a href="#" className="text-xs font-medium text-primary mt-3 inline-block">Visit help center ↗</a>
-      </div>
-      <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-xs font-semibold text-primary">CS</div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-900 truncate">Chethina Sri</p>
-          <p className="text-xs text-slate-500">Candidate account</p>
-        </div>
-      </div>
     </aside>
   )
 }
 
-const questions = [
-  {
-    text: 'Which concept allows a class to acquire properties and methods from another class?',
-    options: ['Encapsulation', 'Inheritance', 'Abstraction', 'Polymorphism'],
-    correct: 1,
-  },
-  // TODO: replace with real question bank fetched from the backend, 28 questions for this assessment
-]
-
 export default function AssessmentScreenPage() {
-  const totalQuestions = 28
-  const [currentIndex, setCurrentIndex] = useState(6) // question 7, zero-indexed
-  const [answers, setAnswers] = useState({ 0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 6: 1 }) // mock answered set
-  const question = questions[0] // placeholder: same question shown regardless of index until wired up
+  const { id } = useParams()
+  const assessment = assessmentBank[id]
+
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [answers, setAnswers] = useState({})
+
+  if (!assessment) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center max-w-sm">
+          <h1 className="text-lg font-semibold text-slate-900 mb-2">Assessment not found</h1>
+          <p className="text-sm text-slate-500 mb-6">We couldn't find an assessment matching "{id}".</p>
+          <Link to="/candidate/assessments" className="text-primary font-semibold text-sm">
+            Back to assessments
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  const { title, level, totalQuestions, timeLimit, questions } = assessment
+  // TODO: once the real question bank is wired up, remove this modulo fallback.
+  const question = questions[currentIndex % questions.length]
 
   function selectAnswer(optionIndex) {
     setAnswers((prev) => ({ ...prev, [currentIndex]: optionIndex }))
@@ -106,7 +221,7 @@ export default function AssessmentScreenPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <CandidateSidebar />
+      <CandidateSidebar activeId={id} />
       <div className="ml-60 p-6">
         <div className="bg-white rounded-2xl border border-slate-200 p-6 flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
@@ -117,8 +232,8 @@ export default function AssessmentScreenPage() {
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">Java Programming Assessment</h1>
-              <p className="text-sm text-slate-500">Level: Elementary</p>
+              <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
+              <p className="text-sm text-slate-500">Level: {level}</p>
             </div>
           </div>
           <div className="flex items-center gap-8">
@@ -131,7 +246,7 @@ export default function AssessmentScreenPage() {
             </div>
             <div className="border-l border-slate-200 pl-8">
               <p className="text-xs text-slate-500 mb-1">Time remaining</p>
-              <p className="text-2xl font-bold text-slate-900">18:44</p>
+              <p className="text-2xl font-bold text-slate-900">{timeLimit}</p>
             </div>
           </div>
         </div>
