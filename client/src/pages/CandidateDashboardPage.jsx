@@ -108,21 +108,6 @@ export default function CandidateDashboardPage() {
             )
           })}
         </nav>
-
-        <div className="mt-auto space-y-3 border-t border-gray-200 pt-4">
-          <div className="flex items-center gap-2.5 px-1">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#EAF1FF] text-xs font-semibold text-primary">
-              CS
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-gray-900">Chethina Sri</p>
-              <p className="text-xs text-gray-500">Candidate account</p>
-            </div>
-          </div>
-          <Link to="/" className="inline-flex min-h-11 items-center justify-center w-full rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            Log out
-          </Link>
-        </div>
       </aside>
 
       {/* Main column */}
@@ -392,14 +377,6 @@ export default function CandidateDashboardPage() {
             </div>
           </div>
         </main>
-
-        <footer className="flex flex-col gap-2 border-t border-gray-200 px-6 py-5 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between lg:px-10">
-          <p>© Credify · Your skills. Your credibility.</p>
-          <p className="space-x-4">
-            <a href="#" className="hover:underline">Privacy policy</a>
-            <a href="#" className="hover:underline">Terms of service</a>
-          </p>
-        </footer>
       </div>
     </div>
   )
