@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 const navItems = [
@@ -7,6 +7,21 @@ const navItems = [
   { label: "Create Jobs", path: "/recruiter/jobs/create" },
   { label: "Saved Candidates", path: "/recruiter/saved-candidates" },
   { label: "My Profile", path: "/recruiter/profile" },
+];
+
+const notifications = [
+  {
+    title: "New application received",
+    detail: "A candidate applied to Backend Engineer",
+  },
+  {
+    title: "Candidate match found",
+    detail: "Danee Smith matches 92% for Senior Frontend Engineer",
+  },
+  {
+    title: "Job posting expiring soon",
+    detail: "Frontend Engineer posting closes in 3 days",
+  },
 ];
 
 function RecruiterSidebar() {
@@ -51,31 +66,6 @@ function RecruiterSidebar() {
           );
         })}
       </nav>
-      <div className="mx-4 mb-4 rounded-2xl bg-slate-50 p-4">
-        <p className="text-sm font-semibold text-slate-900">
-          Here to help you grow
-        </p>
-        <p className="text-xs text-slate-500 mt-2">
-          Get help with your profile, skills and assessments.
-        </p>
-        <a
-          href="#"
-          className="text-xs font-medium text-primary mt-3 inline-block"
-        >
-          Visit help center ↗
-        </a>
-      </div>
-      <div className="px-6 py-4 border-t border-slate-200 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center text-xs font-semibold text-primary">
-          MP
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-900 truncate">
-            M Perera
-          </p>
-          <p className="text-xs text-slate-500">Recruiter account</p>
-        </div>
-      </div>
     </aside>
   );
 }
@@ -162,6 +152,24 @@ export default function CreateJobVacancyPage() {
   ]);
   const [skillInput, setSkillInput] = useState("");
 
+  // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
+  const [openMenu, setOpenMenu] = useState(null);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpenMenu(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function toggleMenu(name) {
+    setOpenMenu((m) => (m === name ? null : name));
+  }
+
   const SALARY_MIN = 0;
   const SALARY_MAX = 500000;
   const SALARY_STEP = 5000;
@@ -210,13 +218,182 @@ export default function CreateJobVacancyPage() {
     <div className="min-h-screen bg-slate-50">
       <RecruiterSidebar />
       <div className="ml-60">
-        <header className="bg-white border-b border-slate-200 px-10 py-7">
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Create Job Vacancy
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Define the requirements for your new position
-          </p>
+        <header className="bg-white border-b border-slate-200 px-10 py-7 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">
+              Create Job Vacancy
+            </h1>
+            <p className="text-sm text-slate-500 mt-1">
+              Define the requirements for your new position
+            </p>
+          </div>
+          <div className="flex items-center gap-4" ref={menuRef}>
+            {/* Help dropdown */}
+            <div className="relative">
+              <button
+                aria-label="Help"
+                onClick={() => toggleMenu("help")}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path
+                    d="M9.5 9a2.5 2.5 0 014.8 1c0 1.5-2.3 1.8-2.3 3.3"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="12" cy="17" r="0.6" fill="currentColor" />
+                </svg>
+              </button>
+              {openMenu === "help" && (
+                <div className="absolute right-0 top-full z-20 mt-2 w-60 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
+                  <a
+                    href="#"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Visit help center
+                  </a>
+                  <a
+                    href="#"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Privacy policy
+                  </a>
+                  <a
+                    href="#"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Terms of service
+                  </a>
+                  <a
+                    href="#"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    About us
+                  </a>
+                  <a
+                    href="#"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Give feedback about Credify
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Notifications dropdown */}
+            <div className="relative">
+              <button
+                aria-label="Notifications"
+                onClick={() => toggleMenu("notifications")}
+                className="relative text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M6 10a6 6 0 1112 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M10 18a2 2 0 004 0" strokeLinecap="round" />
+                </svg>
+                <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+              </button>
+              {openMenu === "notifications" && (
+                <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
+                  <p className="px-4 py-2 text-sm font-semibold text-gray-900">
+                    Notifications
+                  </p>
+                  <div className="max-h-64 overflow-y-auto">
+                    {notifications.map((n) => (
+                      <a
+                        key={n.title}
+                        href="#"
+                        className="block border-t border-gray-100 px-4 py-2.5 text-sm hover:bg-gray-50"
+                      >
+                        <span className="block font-medium text-gray-900">
+                          {n.title}
+                        </span>
+                        <span className="block text-xs text-gray-500">
+                          {n.detail}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                  <Link
+                    to="#"
+                    className="block border-t border-gray-100 px-4 py-2 text-center text-sm font-semibold text-primary hover:underline"
+                  >
+                    View all notifications
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            {/* Profile dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => toggleMenu("profile")}
+                className="flex items-center gap-2"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-primary">
+                  MP
+                </div>
+                <span className="hidden text-sm font-medium text-gray-700 sm:block">
+                  M Perera
+                </span>
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M6 9l6 6 6-6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              {openMenu === "profile" && (
+                <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
+                  <Link
+                    to="/recruiter/profile"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    My Profile
+                  </Link>
+                  <Link
+                    to="#"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    Settings
+                  </Link>
+                  <div className="my-1 border-t border-gray-100" />
+                  <Link
+                    to="/"
+                    className="block px-4 py-2 text-sm font-medium text-red-600 hover:bg-gray-50"
+                  >
+                    Log out
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
         </header>
 
         <main className="p-10 grid grid-cols-3 gap-6">
