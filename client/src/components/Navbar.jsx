@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom'
 
 const links = [
   { label: 'Home', href: '#home' },
-  { label: 'About', href: '#about' },
   { label: 'How It Works', href: '#how-it-works' },
-  { label: 'For Candidates', href: '#CandidateDashboardPage' },
-  { label: 'For Recruiters', href: '#why-credify' },
+  { label: 'Why Credify', href: '#why-credify'},
+  { label: 'About', href: '#about' },
+
 ]
 
 export default function Navbar() {
