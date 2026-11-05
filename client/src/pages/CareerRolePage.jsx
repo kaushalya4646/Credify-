@@ -15,24 +15,28 @@ const categories = ['Software development', 'Data science & AI', 'Cloud & DevOps
 // TODO (backend step): replace with career roles from the API, filtered by category and search text.
 const roles = [
   {
+    id: 'backend-developer',
     name: 'Backend developer',
     desc: 'API, database and server-side development',
     skillsRequired: 12,
     icons: [{ bg: '#DCFCE7', fg: '#15803D', glyph: '🗄' }, { bg: '#DBEAFE', fg: '#2563EB', glyph: '⚙' }],
   },
   {
+    id: 'frontend-developer',
     name: 'Frontend developer',
     desc: 'Web interfaces and front-end technologies',
     skillsRequired: 14,
     icons: [{ bg: '#FFE4D6', fg: '#C2410C', glyph: '🖼' }, { bg: '#FFE4D6', fg: '#C2410C', glyph: '🧩' }],
   },
   {
+    id: 'full-stack-developer',
     name: 'Full stack developer',
     desc: 'Front-end and back-end development',
     skillsRequired: 26,
     icons: [{ bg: '#DCFCE7', fg: '#15803D', glyph: '🗄' }, { bg: '#FFE4D6', fg: '#C2410C', glyph: '🖼' }],
   },
   {
+    id: 'data-analyst',
     name: 'Data analyst',
     desc: 'Data analysis, visualization and SQL',
     skillsRequired: 10,
@@ -238,7 +242,7 @@ export default function CareerRolePage() {
           {/* Role cards */}
           <div className="grid gap-5 md:grid-cols-2">
             {visibleRoles.map((r) => (
-              <div key={r.name} className="flex flex-col rounded-xl border border-gray-200 bg-white p-6">
+              <div key={r.id} className="flex flex-col rounded-xl border border-gray-200 bg-white p-6">
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="text-lg font-bold text-gray-900">{r.name}</h3>
                   <span className="shrink-0 rounded-full bg-[#E8F5EE] px-3 py-1 text-xs font-semibold text-[#15803D]">
@@ -260,10 +264,10 @@ export default function CareerRolePage() {
                 </div>
 
                 <div className="mt-auto border-t border-gray-100 pt-4">
-                  <a href="#" className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+                  <Link to={`/candidate/career-role/${r.id}`} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
                     View details
                     <span>›</span>
-                  </a>
+                  </Link>
                 </div>
               </div>
             ))}
