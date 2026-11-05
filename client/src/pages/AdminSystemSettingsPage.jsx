@@ -15,7 +15,7 @@ const navItems = [
 function AdminSidebar() {
   const location = useLocation();
   return (
-    <aside className="fixed left-0 top-0 h-screen w-60 bg-white border-r border-slate-200 flex flex-col">
+    <aside className="lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:flex lg:overflow-y-auto w-60 bg-white border-r border-slate-200 flex flex-col">
       <div className="px-6 pt-8 pb-6 flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
           <svg
