@@ -17,10 +17,6 @@ export default function Hero() {
       <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
         {/* Left side */}
         <div>
-          <span className="inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-primary">
-            🚀 Launching Credify 2.0 with AI Skill Matching
-          </span>
-
           <h1 className="mt-6 text-4xl font-extrabold uppercase leading-tight tracking-tight text-slate-900 md:text-5xl">
             Verify your skills.
             <br />
@@ -39,12 +35,6 @@ export default function Hero() {
               className="flex min-h-12 items-center justify-center gap-2 rounded-lg bg-primary px-6 font-semibold text-white hover:bg-primary-dark"
             >
               Get Started <span aria-hidden="true">→</span>
-            </Link>
-            <Link
-              to="/register"
-              className="flex min-h-12 items-center justify-center rounded-lg border border-slate-200 px-6 font-medium text-primary hover:bg-slate-50"
-            >
-              For Recruiters
             </Link>
           </div>
 

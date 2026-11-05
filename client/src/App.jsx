@@ -33,8 +33,21 @@ import CareerRoleDetailsPage from './pages/CareerRoleDetailsPage'
 import AssessmentInstructionsPage from './pages/AssessmentInstructionsPage'
 import MyJobsPage from './pages/MyJobsPage'
 import AdminAssessmentEditorPage from './pages/AdminAssessmentEditorPage'
-import AdminVerificationRecordsPage from './pages/AdminVerificationRecordsPage'
 import AdminPlatformContentPage from './pages/AdminPlatformContentPage'
+
+// routes for pages in landing page(footer)
+import ContactPage from './pages/ContactPage'
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
+import TermsOfServicePage from './pages/TermsOfServicePage'
+import AboutUsPage from './pages/AboutUsPage'
+import CareersPage from './pages/CareersPage'
+import SuccessStoriesPage from './pages/SuccessStoriesPage'
+import TalentSearchPage from './pages/TalentSearchPage'
+import EnterpriseAuditingPage from './pages/EnterpriseAuditingPage'
+import RequestDemoPage from './pages/RequestDemoPage'
+import VerifyCredentialsPage from './pages/VerifyCredentialsPage'
+import AssessmentsOverviewPage from './pages/AssessmentsOverviewPage'
+import TalkToSalesPage from './pages/TalkToSalesPage'
 
 export default function App() {
   return (
@@ -49,7 +62,7 @@ export default function App() {
       <Route path="/candidate/assessments" element={<AssessmentsPage />} />
       <Route path="/candidate/assessments/results" element={<AssessmentResultPage />} />
       <Route path="/candidate/skill-gaps" element={<SkillGapsPage />} />
-      <Route path="/candidate/assessments/screen" element={<AssessmentScreenPage />} />
+      <Route path="/candidate/assessments/:id/screen" element={<AssessmentScreenPage />} />
 
       <Route path="/recruiter/dashboard" element={<RecruiterDashboardPage />} />
       <Route path="/recruiter/find-candidates" element={<FindCandidatesPage />} />
@@ -76,11 +89,22 @@ export default function App() {
       <Route path="/recruiter/jobs" element={<MyJobsPage />} />
 
       <Route path="/admin/assessments/editor" element={<AdminAssessmentEditorPage />} />
-      <Route path="/admin/verification" element={<AdminVerificationRecordsPage />} />
       <Route path="/admin/content" element={<AdminPlatformContentPage />} />
 
       <Route path="*" element={<NotFoundPage />} />
       
+      <Route path="/contact" element={<ContactPage />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+      <Route path="/about-us" element={<AboutUsPage />} />
+      <Route path="/careers" element={<CareersPage />} />
+      <Route path="/success-stories" element={<SuccessStoriesPage />} />
+      <Route path="/talent-search" element={<TalentSearchPage />} />
+      <Route path="/enterprise-auditing" element={<EnterpriseAuditingPage />} />
+      <Route path="/request-demo" element={<RequestDemoPage />} />
+      <Route path="/verify-credentials" element={<VerifyCredentialsPage />} />
+      <Route path="/assessments" element={<AssessmentsOverviewPage />} />
+      <Route path="/talk-to-sales" element={<TalkToSalesPage/>} />
 
     </Routes>
   )
