@@ -1,4 +1,3 @@
-// src/pages/AdminSkillsPage.jsx
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -13,9 +12,18 @@ const navItems = [
 ];
 
 const notifications = [
-  { title: "New recruiter signup", detail: "TechVision Solutions registered as a new recruiter" },
-  { title: "Flagged assessment content", detail: "A candidate reported an issue with the SQL assessment" },
-  { title: "Weekly platform report ready", detail: "Your usage and activity summary is ready to view" },
+  {
+    title: "New recruiter signup",
+    detail: "TechVision Solutions registered as a new recruiter",
+  },
+  {
+    title: "Flagged assessment content",
+    detail: "A candidate reported an issue with the SQL assessment",
+  },
+  {
+    title: "Weekly platform report ready",
+    detail: "Your usage and activity summary is ready to view",
+  },
 ];
 
 function AdminSidebar() {
@@ -348,19 +356,54 @@ export default function AdminSkillsPage() {
                   onClick={() => toggleHeaderMenu("help")}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    aria-hidden="true"
+                  >
                     <circle cx="12" cy="12" r="9" />
-                    <path d="M9.5 9a2.5 2.5 0 014.8 1c0 1.5-2.3 1.8-2.3 3.3" strokeLinecap="round" />
+                    <path
+                      d="M9.5 9a2.5 2.5 0 014.8 1c0 1.5-2.3 1.8-2.3 3.3"
+                      strokeLinecap="round"
+                    />
                     <circle cx="12" cy="17" r="0.6" fill="currentColor" />
                   </svg>
                 </button>
                 {openMenu === "help" && (
-                  <div className="absolute right-0 top-full z-20 mt-2 w-60 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Visit help center</a>
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Privacy policy</a>
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Terms of service</a>
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">About us</a>
-                    <a href="#" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Give feedback about Credify</a>
+                  <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
+                    <Link
+                      to="/admin/help-center"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Manage help center
+                    </Link>
+                    <Link
+                      to="/admin/privacy-policy"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Manage privacy policy
+                    </Link>
+                    <Link
+                      to="/admin/terms-of-service"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Manage terms of service
+                    </Link>
+                    <Link
+                      to="/admin/about-us"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Manage about us
+                    </Link>
+                    <Link
+                      to="/admin/feedback"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Manage feedback
+                    </Link>
                   </div>
                 )}
               </div>
@@ -372,24 +415,48 @@ export default function AdminSkillsPage() {
                   onClick={() => toggleHeaderMenu("notifications")}
                   className="relative text-gray-400 hover:text-gray-600"
                 >
-                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                    <path d="M6 10a6 6 0 1112 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z" strokeLinecap="round" strokeLinejoin="round" />
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M6 10a6 6 0 1112 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                     <path d="M10 18a2 2 0 004 0" strokeLinecap="round" />
                   </svg>
                   <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
                 </button>
                 {openMenu === "notifications" && (
                   <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
-                    <p className="px-4 py-2 text-sm font-semibold text-gray-900">Notifications</p>
+                    <p className="px-4 py-2 text-sm font-semibold text-gray-900">
+                      Notifications
+                    </p>
                     <div className="max-h-64 overflow-y-auto">
                       {notifications.map((n) => (
-                        <a key={n.title} href="#" className="block border-t border-gray-100 px-4 py-2.5 text-sm hover:bg-gray-50">
-                          <span className="block font-medium text-gray-900">{n.title}</span>
-                          <span className="block text-xs text-gray-500">{n.detail}</span>
+                        <a
+                          key={n.title}
+                          href="#"
+                          className="block border-t border-gray-100 px-4 py-2.5 text-sm hover:bg-gray-50"
+                        >
+                          <span className="block font-medium text-gray-900">
+                            {n.title}
+                          </span>
+                          <span className="block text-xs text-gray-500">
+                            {n.detail}
+                          </span>
                         </a>
                       ))}
                     </div>
-                    <Link to="#" className="block border-t border-gray-100 px-4 py-2 text-center text-sm font-semibold text-primary hover:underline">
+                    <Link
+                      to="#"
+                      className="block border-t border-gray-100 px-4 py-2 text-center text-sm font-semibold text-primary hover:underline"
+                    >
                       View all notifications
                     </Link>
                   </div>
@@ -398,21 +465,52 @@ export default function AdminSkillsPage() {
 
               {/* Profile dropdown */}
               <div className="relative">
-                <button onClick={() => toggleHeaderMenu("profile")} className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleHeaderMenu("profile")}
+                  className="flex items-center gap-2"
+                >
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-primary">
                     AU
                   </div>
-                  <span className="hidden text-sm font-medium text-gray-700 sm:block">Admin User</span>
-                  <svg viewBox="0 0 24 24" className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                  <span className="hidden text-sm font-medium text-gray-700 sm:block">
+                    Admin User
+                  </span>
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M6 9l6 6 6-6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </button>
                 {openMenu === "profile" && (
                   <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
-                    <Link to="/admin/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Profile</Link>
-                    <Link to="/admin/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Settings</Link>
+                    <Link
+                      to="/admin/profile"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      My Profile
+                    </Link>
+                    <Link
+                      to="/admin/settings"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      Settings
+                    </Link>
                     <div className="my-1 border-t border-gray-100" />
-                    <Link to="/" className="block px-4 py-2 text-sm font-medium text-red-600 hover:bg-gray-50">Log out</Link>
+                    <Link
+                      to="/"
+                      className="block px-4 py-2 text-sm font-medium text-red-600 hover:bg-gray-50"
+                    >
+                      Log out
+                    </Link>
                   </div>
                 )}
               </div>
