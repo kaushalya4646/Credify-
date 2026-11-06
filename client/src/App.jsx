@@ -49,6 +49,10 @@ import VerifyCredentialsPage from './pages/VerifyCredentialsPage'
 import AssessmentsOverviewPage from './pages/AssessmentsOverviewPage'
 import TalkToSalesPage from './pages/TalkToSalesPage'
 
+import HelpCenterPage from './pages/HelpCenterPage'
+import FeedbackPage from './pages/FeedbackPage'
+import SettingsPage from './pages/SettingsPage'
+
 export default function App() {
   return (
     <Routes>
@@ -106,6 +110,10 @@ export default function App() {
       <Route path="/assessments" element={<AssessmentsOverviewPage />} />
       <Route path="/talk-to-sales" element={<TalkToSalesPage/>} />
 
+      <Route path="/help-center" element={<HelpCenterPage />} />
+      <Route path="/feedback" element={<FeedbackPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
+      
     </Routes>
   )
 }
