@@ -53,6 +53,12 @@ import HelpCenterPage from './pages/HelpCenterPage'
 import FeedbackPage from './pages/FeedbackPage'
 import SettingsPage from './pages/SettingsPage'
 
+import AdminHelpCenterManagePage from './pages/AdminHelpCenterManagePage'
+import AdminPrivacyPolicyManagePage from './pages/AdminPrivacyPolicyManagePage'
+import AdminTermsOfServiceManagePage from './pages/AdminTermsOfServiceManagePage'
+import AdminAboutUsManagePage from './pages/AdminAboutUsManagePage'
+import AdminFeedbackManagePage from './pages/AdminFeedbackManagePage'
+
 export default function App() {
   return (
     <Routes>
@@ -113,6 +119,12 @@ export default function App() {
       <Route path="/help-center" element={<HelpCenterPage />} />
       <Route path="/feedback" element={<FeedbackPage />} />
       <Route path="/settings" element={<SettingsPage />} />
+
+      <Route path="/admin/help-center" element={<AdminHelpCenterManagePage />} />
+      <Route path="/admin/privacy-policy" element={<AdminPrivacyPolicyManagePage />} />
+      <Route path="/admin/terms-of-service" element={<AdminTermsOfServiceManagePage />} />
+      <Route path="/admin/about-us" element={<AdminAboutUsManagePage />} />
+      <Route path="/admin/feedback" element={<AdminFeedbackManagePage />} />
       
     </Routes>
   )
