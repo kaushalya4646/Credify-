@@ -1,3 +1,4 @@
+// RecruiterDashboardPage.jsx
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -143,36 +144,36 @@ export default function RecruiterDashboardPage() {
               </button>
               {openMenu === "help" && (
                 <div className="absolute right-0 top-full z-20 mt-2 w-60 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
-                  <a
-                    href="#"
+                  <Link
+                    to="/help-center"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     Visit help center
-                  </a>
-                  <a
-                    href="#"
+                  </Link>
+                  <Link
+                    to="/privacy-policy"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     Privacy policy
-                  </a>
-                  <a
-                    href="#"
+                  </Link>
+                  <Link
+                    to="/terms-of-service"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     Terms of service
-                  </a>
-                  <a
-                    href="#"
+                  </Link>
+                  <Link
+                    to="/about-us"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     About us
-                  </a>
-                  <a
-                    href="#"
+                  </Link>
+                  <Link
+                    to="/feedback"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     Give feedback about Credify
-                  </a>
+                  </Link>
                 </div>
               )}
             </div>
@@ -268,7 +269,7 @@ export default function RecruiterDashboardPage() {
                     My Profile
                   </Link>
                   <Link
-                    to="#"
+                    to="/settings"
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     Settings
