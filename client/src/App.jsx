@@ -58,6 +58,7 @@ import AdminPrivacyPolicyManagePage from './pages/AdminPrivacyPolicyManagePage'
 import AdminTermsOfServiceManagePage from './pages/AdminTermsOfServiceManagePage'
 import AdminAboutUsManagePage from './pages/AdminAboutUsManagePage'
 import AdminFeedbackManagePage from './pages/AdminFeedbackManagePage'
+import AdminProfilePage from './pages/AdminProfilePage'
 
 export default function App() {
   return (
@@ -125,6 +126,7 @@ export default function App() {
       <Route path="/admin/terms-of-service" element={<AdminTermsOfServiceManagePage />} />
       <Route path="/admin/about-us" element={<AdminAboutUsManagePage />} />
       <Route path="/admin/feedback" element={<AdminFeedbackManagePage />} />
+      <Route path="/admin/profile" element={<AdminProfilePage />} />
       
     </Routes>
   )
