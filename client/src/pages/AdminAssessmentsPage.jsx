@@ -145,6 +145,7 @@ export default function AdminAssessmentsPage() {
   const [openMenuIndex, setOpenMenuIndex] = useState(null);
   const [editingAssessment, setEditingAssessment] = useState(null);
   const [deletingAssessment, setDeletingAssessment] = useState(null);
+  const [viewingAssessment, setViewingAssessment] = useState(null);
 
   // header dropdown state: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -222,9 +223,7 @@ export default function AdminAssessmentsPage() {
 
   function viewDetails(a) {
     setOpenMenuIndex(null);
-    alert(
-      `${a.name}\nSkill: ${a.skill}\nDifficulty: ${a.difficulty}\nType: ${a.type}\nQuestions: ${a.questions}\nAttempts: ${a.attempts}\nAverage score: ${a.avg}`,
-    );
+    setViewingAssessment(a);
   }
 
   function saveEdit(e) {
@@ -625,6 +624,80 @@ export default function AdminAssessmentsPage() {
           </div>
         </main>
       </div>
+
+      {/* View details modal */}
+      {viewingAssessment && (
+        <Modal
+          title={viewingAssessment.name}
+          onClose={() => setViewingAssessment(null)}
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Skill</p>
+                <span className="inline-block px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium">
+                  ✓ {viewingAssessment.skill}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Difficulty</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingAssessment.difficulty}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Type</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingAssessment.type}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Status</p>
+                <span
+                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    viewingAssessment.status === "Active"
+                      ? "bg-green-50 text-green-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {viewingAssessment.status}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Questions</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingAssessment.questions}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Attempts</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingAssessment.attempts.toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Average score</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {viewingAssessment.avg}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Last updated</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingAssessment.updated}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setViewingAssessment(null)}
+              className="w-full min-h-11 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Edit assessment modal */}
       {editingAssessment && (
