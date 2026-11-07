@@ -184,6 +184,7 @@ export default function AdminCareerRolesPage() {
   const [openMenuIndex, setOpenMenuIndex] = useState(null);
   const [editingRole, setEditingRole] = useState(null); // { index, data: { ...role, skillsText } }
   const [deletingRole, setDeletingRole] = useState(null); // { index, name }
+  const [viewingRole, setViewingRole] = useState(null);
 
   // header dropdown state: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -253,9 +254,7 @@ export default function AdminCareerRolesPage() {
 
   function viewDetails(r) {
     setOpenMenuIndex(null);
-    alert(
-      `${r.name}\nCategory: ${r.category}\nStatus: ${r.status}\nRequired skills: ${r.skills.join(", ")}\nCandidates: ${r.candidates}\nAssessments: ${r.assessments}`,
-    );
+    setViewingRole(r);
   }
 
   function duplicateRole(index) {
@@ -681,6 +680,75 @@ export default function AdminCareerRolesPage() {
           </div>
         </main>
       </div>
+
+      {/* View details modal */}
+      {viewingRole && (
+        <Modal title={viewingRole.name} onClose={() => setViewingRole(null)}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Category</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingRole.category}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Status</p>
+                <span
+                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    viewingRole.status === "Active"
+                      ? "bg-green-50 text-green-700"
+                      : viewingRole.status === "Draft"
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {viewingRole.status}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Candidates</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingRole.candidates}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Assessments</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingRole.assessments}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Last updated</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingRole.updated}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <p className="text-xs text-slate-500 mb-2">Required skills</p>
+              <div className="flex flex-wrap gap-2">
+                {viewingRole.skills.map((s) => (
+                  <span
+                    key={s}
+                    className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium"
+                  >
+                    ✓ {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setViewingRole(null)}
+              className="w-full min-h-11 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Add career role modal */}
       {addingRole && (
