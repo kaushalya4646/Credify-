@@ -156,6 +156,7 @@ export default function AdminSkillsPage() {
   const [openMenuIndex, setOpenMenuIndex] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null); // { index, data: { ...row, skillsText } }
   const [deletingCategory, setDeletingCategory] = useState(null); // { index, name }
+  const [viewingCategory, setViewingCategory] = useState(null);
 
   // header dropdown state: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -254,9 +255,7 @@ export default function AdminSkillsPage() {
 
   function viewDetails(c) {
     setOpenMenuIndex(null);
-    alert(
-      `${c.category}\nType: ${c.type}\nMicro skills: ${c.skills.join(", ")}\nUsage: ${c.usage}\nStatus: ${c.status}`,
-    );
+    setViewingCategory(c);
   }
 
   function duplicateCategory(index) {
@@ -726,6 +725,66 @@ export default function AdminSkillsPage() {
           </div>
         </main>
       </div>
+
+      {/* View details modal */}
+      {viewingCategory && (
+        <Modal
+          title={viewingCategory.category}
+          onClose={() => setViewingCategory(null)}
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Skill type</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingCategory.type}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Status</p>
+                <span
+                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    viewingCategory.status === "Active"
+                      ? "bg-green-50 text-green-700"
+                      : viewingCategory.status === "Draft"
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {viewingCategory.status}
+                </span>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Usage</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewingCategory.usage}
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <p className="text-xs text-slate-500 mb-2">Micro skills</p>
+              <div className="flex flex-wrap gap-2">
+                {viewingCategory.skills.map((s) => (
+                  <span
+                    key={s}
+                    className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium"
+                  >
+                    ✓ {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setViewingCategory(null)}
+              className="w-full min-h-11 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+            >
+              Close
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Add skill modal */}
       {addingSkill && (
