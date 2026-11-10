@@ -20,7 +20,7 @@
   "homepage": "https://github.com/kaushalya4646/Credify-#readme",
   "description": "",
   "dependencies": {
-    "@prisma/client": "^7.10.1",
+    "@prisma/client": "^6.19.3",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.9",
@@ -30,6 +30,6 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.14",
-    "prisma": "^7.10.1"
+    "prisma": "^6.19.3"
   }
 }
