@@ -1,0 +1,131 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CANDIDATE
+  RECRUITER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  candidateProfile CandidateProfile?
+  recruiterProfile RecruiterProfile?
+  attempts            AssessmentAttempt[]
+  skillVerifications  SkillVerification[]
+}
+  
+model CandidateProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  bio        String?
+  education  String?
+  links      String?
+  visibility String   @default("public")
+  createdAt  DateTime @default(now())
+  targetCareerRoleId String?
+  targetCareerRole   CareerRole? @relation(fields: [targetCareerRoleId], references: [id])
+}
+
+model RecruiterProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id])
+  companyName    String?
+  companyWebsite String?
+  createdAt      DateTime @default(now())
+}
+
+model Skill {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  category  String?
+  createdAt DateTime @default(now())
+  careerRoles CareerRoleSkill[]
+  assessments Assessment[]
+  skillVerifications SkillVerification[]
+}
+
+model CareerRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  skills     CareerRoleSkill[]
+  candidates CandidateProfile[]
+}
+
+model CareerRoleSkill {
+  id            String     @id @default(uuid())
+  careerRoleId  String
+  careerRole    CareerRole @relation(fields: [careerRoleId], references: [id])
+  skillId       String
+  skill         Skill      @relation(fields: [skillId], references: [id])
+  requiredLevel String
+
+  @@unique([careerRoleId, skillId])
+}
+
+model Assessment {
+  id         String   @id @default(uuid())
+  skillId    String
+  skill      Skill    @relation(fields: [skillId], references: [id])
+  title      String
+  difficulty String
+  type       String
+  status     String   @default("Active")
+  createdAt  DateTime @default(now())
+  questions  AssessmentQuestion[]
+  attempts   AssessmentAttempt[]
+}
+
+model AssessmentQuestion {
+  id             String     @id @default(uuid())
+  assessmentId   String
+  assessment     Assessment @relation(fields: [assessmentId], references: [id])
+  questionText   String
+  options        Json?
+  correctAnswer  String
+}
+
+model AssessmentAttempt {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  score        Int?
+  status       String     @default("In Progress")
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+}
+
+model SkillVerification {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  skillId    String
+  skill      Skill    @relation(fields: [skillId], references: [id])
+  status     String   @default("Not Verified")
+  verifiedAt DateTime?
+
+  @@unique([userId, skillId])
+}
