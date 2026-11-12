@@ -69,4 +69,32 @@ async function deleteCareerRole(req, res) {
   }
 }
 
+async function addSkillToCareerRole(req, res) {
+  try {
+    const { id } = req.params; // careerRoleId
+    const { skillId, requiredLevel } = req.body;
+
+    if (!skillId || !requiredLevel) {
+      return res.status(400).json({ error: "skillId and requiredLevel are required." });
+    }
+
+    const link = await prisma.careerRoleSkill.create({
+      data: { careerRoleId: id, skillId, requiredLevel },
+    });
+
+    res.status(201).json(link);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not attach skill to career role." });
+  }
+}
+
+
+
+
+
+
+
+
+
 module.exports = { getCareerRoles, createCareerRole, updateCareerRole, deleteCareerRole };
