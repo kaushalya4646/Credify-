@@ -4,6 +4,7 @@ const {
   createCareerRole,
   updateCareerRole,
   deleteCareerRole,
+  addSkillToCareerRole,
 } = require("../controllers/careerRolesController");
 const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
