@@ -97,4 +97,4 @@ async function addSkillToCareerRole(req, res) {
 
 
 
-module.exports = { getCareerRoles, createCareerRole, updateCareerRole, deleteCareerRole };
+module.exports = { ggetCareerRoles, createCareerRole, updateCareerRole, deleteCareerRole, addSkillToCareerRole };
