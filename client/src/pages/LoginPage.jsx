@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const emailPattern = /^\S+@\S+\.\S+$/
 
@@ -15,13 +17,18 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState({})
+  const [submitError, setSubmitError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const navigate = useNavigate()
+  const { login } = useAuth()
 
   const handleChange = (e) => {
     const { id, value } = e.target
     setForm((f) => ({ ...f, [id]: value }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const next = {}
 
@@ -30,13 +37,26 @@ export default function LoginPage() {
     if (!form.password) next.password = 'Password is required.'
 
     setErrors(next)
+    setSubmitError('')
     if (Object.keys(next).length > 0) return
 
-    // TODO (backend step): send { email, password, remember } to the login API.
-    // The server checks the credentials, asks for the 2FA code, and returns the user's role.
-    // Then redirect by role: candidate -> candidate dashboard, recruiter -> recruiter dashboard.
-    // Admins can't log in here, they use /admin/login.
-    console.log('Login:', { email: form.email.trim(), remember })
+    setSubmitting(true)
+    try {
+      const result = await api.post('/api/auth/login', {
+        email: form.email.trim(),
+        password: form.password,
+      })
+
+      login(result)
+
+      if (result.user.role === 'CANDIDATE') navigate('/candidate/dashboard')
+      else if (result.user.role === 'RECRUITER') navigate('/recruiter/dashboard')
+      else if (result.user.role === 'ADMIN') navigate('/admin/dashboard')
+    } catch (err) {
+      setSubmitError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -119,6 +139,12 @@ export default function LoginPage() {
           <h1 className="text-[28px] font-bold leading-9 tracking-tight text-gray-900">Welcome back</h1>
           <p className="mt-1.5 text-sm text-gray-500">Sign in to continue to your Credify account.</p>
 
+          {submitError && (
+            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+              {submitError}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-4">
             {/* Email */}
             <div>
@@ -149,7 +175,6 @@ export default function LoginPage() {
                 <label htmlFor="password" className="text-[13px] font-semibold leading-5 text-gray-900">
                   Password
                 </label>
-                {/* TODO: link to the forgot-password page when it exists */}
                 <Link to="/forgot-password" className="text-[13px] font-medium text-primary hover:underline">
                   Forgot password?
                 </Link>
@@ -198,9 +223,10 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              className="h-12 w-full rounded-lg bg-primary text-[15px] font-semibold text-white hover:bg-primary-dark"
+              disabled={submitting}
+              className="h-12 w-full rounded-lg bg-primary text-[15px] font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
             >
-              Log in
+              {submitting ? 'Logging in…' : 'Log in'}
             </button>
           </form>
 
