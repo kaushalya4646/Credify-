@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams, useNavigate } from 'react-router-dom'
+import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const emailPattern = /^\S+@\S+\.\S+$/
 
@@ -30,13 +32,18 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
   const [errors, setErrors] = useState({})
+  const [submitError, setSubmitError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const navigate = useNavigate()
+  const { login } = useAuth()
 
   const handleChange = (e) => {
     const { id, value } = e.target
     setForm((f) => ({ ...f, [id]: value }))
   }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     const next = {}
 
@@ -48,18 +55,37 @@ export default function RegisterPage() {
     else if (form.confirm !== form.password) next.confirm = 'Passwords do not match.'
 
     setErrors(next)
+    setSubmitError('')
     if (Object.keys(next).length > 0) return
 
     const { role } = profileTypes.find((p) => p.label === profileType)
+    const backendRole = role.toUpperCase() // 'candidate' -> 'CANDIDATE', 'recruiter' -> 'RECRUITER'
 
-    // TODO (backend step): send { fullName, email, password, role, profileType } to the register API.
-    // The server must accept only "candidate" or "recruiter" for role, never "admin".
-    console.log('Register:', {
-      fullName: form.fullName.trim(),
-      email: form.email.trim(),
-      role,
-      profileType,
-    })
+    setSubmitting(true)
+    try {
+      await api.post('/api/auth/register', {
+        name: form.fullName.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: backendRole,
+      })
+
+      // Registration succeeded but doesn't return a token, so log in right after
+      // with the same credentials to take the user straight to their dashboard.
+      const result = await api.post('/api/auth/login', {
+        email: form.email.trim(),
+        password: form.password,
+      })
+
+      login(result)
+
+      if (result.user.role === 'CANDIDATE') navigate('/candidate/dashboard')
+      else if (result.user.role === 'RECRUITER') navigate('/recruiter/dashboard')
+    } catch (err) {
+      setSubmitError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -145,6 +171,12 @@ export default function RegisterPage() {
           <p className="mt-1.5 text-sm text-gray-500">
             Start building your verified professional profile.
           </p>
+
+          {submitError && (
+            <div className="mt-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+              {submitError}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-4">
             {/* Full name */}
@@ -301,9 +333,10 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              className="mt-2 h-12 w-full rounded-lg bg-primary text-[15px] font-semibold text-white hover:bg-primary-dark"
+              disabled={submitting}
+              className="mt-2 h-12 w-full rounded-lg bg-primary text-[15px] font-semibold text-white hover:bg-primary-dark disabled:opacity-60"
             >
-              Create account
+              {submitting ? 'Creating account…' : 'Create account'}
             </button>
           </form>
 
