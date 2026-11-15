@@ -131,7 +131,7 @@ function AdminHeader({ openMenu, menuRef, toggleMenu, title, subtitle }) {
               <Link to="/admin/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Profile</Link>
               <Link to="/admin/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Settings</Link>
               <div className="my-1 border-t border-gray-100" />
-              <Link to="/" className="block px-4 py-2 text-sm font-medium text-red-600 hover:bg-gray-50">Log out</Link>
+              <LogoutLink className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-gray-50" />
             </div>
           )}
         </div>

@@ -40,9 +40,7 @@ function CandidateSidebar() {
         })}
       </nav>
       <div className="px-6 pb-4">
-        <Link to="/" className="flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50">
-          Log out
-        </Link>
+        <LogoutLink className="flex min-h-11 w-full items-center justify-center rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50" />
       </div>
     </aside>
   )
