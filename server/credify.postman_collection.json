@@ -1,0 +1,365 @@
+{
+  "info": {
+    "name": "Credify API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "adminToken", "value": "" },
+    { "key": "candidateToken", "value": "" },
+    { "key": "recruiterToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Admin",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"admin@test.com\", \"password\": \"test1234\", \"name\": \"Admin Test\", \"role\": \"ADMIN\"}"
+            }
+          }
+        },
+        {
+          "name": "Register Candidate",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"candidate@test.com\", \"password\": \"test1234\", \"name\": \"Candidate Test\", \"role\": \"CANDIDATE\"}"
+            }
+          }
+        },
+        {
+          "name": "Register Recruiter",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"recruiter@test.com\", \"password\": \"test1234\", \"name\": \"Recruiter Test\", \"role\": \"RECRUITER\"}"
+            }
+          }
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"admin@test.com\", \"password\": \"test1234\"}"
+            }
+          }
+        },
+        {
+          "name": "Login Candidate",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"candidate@test.com\", \"password\": \"test1234\"}"
+            }
+          }
+        },
+        {
+          "name": "Login Recruiter",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\": \"recruiter@test.com\", \"password\": \"test1234\"}"
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/auth/me",
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Skills",
+      "item": [
+        {
+          "name": "List Skills",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/skills",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
+          }
+        },
+        {
+          "name": "Create Skill (admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/skills",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Node.js\", \"category\": \"Backend\"}"
+            }
+          }
+        },
+        {
+          "name": "Update Skill (admin)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/skills/REPLACE_SKILL_ID",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Node.js\", \"category\": \"Backend Development\"}"
+            }
+          }
+        },
+        {
+          "name": "Delete Skill (admin)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/skills/REPLACE_SKILL_ID",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Career Roles",
+      "item": [
+        {
+          "name": "List Career Roles",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/career-roles",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
+          }
+        },
+        {
+          "name": "Create Career Role (admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/career-roles",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Backend Developer\", \"description\": \"Builds server-side systems\"}"
+            }
+          }
+        },
+        {
+          "name": "Attach Skill to Career Role (admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/career-roles/REPLACE_ROLE_ID/skills",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"skillId\": \"REPLACE_SKILL_ID\", \"requiredLevel\": \"Intermediate\"}"
+            }
+          }
+        },
+        {
+          "name": "Update Career Role (admin)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/career-roles/REPLACE_ROLE_ID",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": \"Backend Developer\", \"description\": \"Updated description\"}"
+            }
+          }
+        },
+        {
+          "name": "Delete Career Role (admin)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/career-roles/REPLACE_ROLE_ID",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Assessments",
+      "item": [
+        {
+          "name": "List Assessments",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/assessments",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
+          }
+        },
+        {
+          "name": "Get Assessment by Id",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
+          }
+        },
+        {
+          "name": "Create Assessment (admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/assessments",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"skillId\": \"REPLACE_SKILL_ID\", \"title\": \"Node.js Basics\", \"difficulty\": \"Beginner\", \"type\": \"Multiple Choice\"}"
+            }
+          }
+        },
+        {
+          "name": "Add Question (admin)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"questionText\": \"What keyword declares a constant in JS?\", \"options\": [\"var\", \"let\", \"const\"], \"correctAnswer\": \"const\"}"
+            }
+          }
+        },
+        {
+          "name": "Submit Attempt (candidate)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/attempts",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"answers\": [{\"questionId\": \"REPLACE_QUESTION_ID\", \"answer\": \"const\"}]}"
+            }
+          }
+        },
+        {
+          "name": "My Attempts (candidate)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/assessments/attempts/me",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Skill Verification",
+      "item": [
+        {
+          "name": "Check Skill Verification (candidate)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/skill-verifications/check/REPLACE_SKILL_ID",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
+          }
+        },
+        {
+          "name": "My Verifications (candidate)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/skill-verifications/me",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Recruiter",
+      "item": [
+        {
+          "name": "Search Candidates",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/recruiter/candidates",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{recruiterToken}}" }] }
+          }
+        },
+        {
+          "name": "Get Candidate Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/recruiter/candidates/REPLACE_USER_ID",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{recruiterToken}}" }] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "List Users (admin)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/users",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
+          }
+        },
+        {
+          "name": "Set User Active Status (admin)",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/admin/users/REPLACE_USER_ID/status",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"isActive\": false}"
+            }
+          }
+        },
+        {
+          "name": "Delete User (admin)",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/admin/users/REPLACE_USER_ID",
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
+          }
+        }
+      ]
+    }
+  ]
+}
