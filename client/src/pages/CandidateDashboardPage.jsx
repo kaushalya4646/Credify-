@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import LogoutLink from "../components/LogoutLink";
+import { useAuth } from "../context/AuthContext";
+import { api } from "../api/client";
 
 const navItems = [
   { label: 'Dashboard', to: '/candidate/dashboard' },
@@ -8,39 +10,6 @@ const navItems = [
   { label: 'Assessments', to: '/candidate/assessments' },
   { label: 'Skill Gaps', to: '/candidate/skill-gaps' },
   { label: 'My Profile', to: '/candidate/profile' },
-]
-
-// TODO (backend step): replace every array below with data from the API.
-const statCards = [
-  { label: 'Verified Skills', value: '14', sub: 'Skills backed by evidence', icon: 'shield-checkmark-outline' },
-  { label: 'Completed Assessments', value: '8', sub: 'Your assessment progress', icon: 'document-text-outline' },
-  { label: 'Skills Match', value: '85%', sub: 'Aligned with your career role', icon: 'speedometer-outline' },
-  { label: 'Skill Gaps', value: '5', sub: 'Opportunities to grow', icon: 'trending-up-outline' },
-]
-
-const careerSkills = [
-  { name: 'React', level: 'Level IV', bg: '#ffffff', icon: 'logo-react', color: '#61DBFB' },
-  { name: 'JavaScript', level: 'Level IV', bg: '#ffffff', icon: 'logo-javascript', color: '#CA8A04'  },
-  { name: 'CSS/HTML', level: 'Level IV', bg: '#ffffff', icon: 'logo-html5', color: '#EA580C' },
-  { name: 'Python', level: 'Level IV', bg: '#ffffff', icon: 'logo-python', color: 'rgb(2, 132, 199)' },
-]
-
-const verificationSkills = [
-  { name: 'React', pct: 85, ok: true },
-  { name: 'Python', pct: 60, ok: true },
-  { name: 'Data Analysis', pct: 30, ok: false },
-]
-
-const recommendedAssessments = [
-  { name: 'React Performance', tag: '</>' },
-  { name: 'Data Science Fundamentals', tag: '📊' },
-  { name: 'System Design', tag: '🔗' },
-]
-
-const recentResults = [
-  { name: 'Python: Data Structures', date: '2024-05-15', score: '92%' },
-  { name: 'Data Science Fundamentals', date: '2024-05-15', score: '93%' },
-  { name: 'Python: Data Analysis', date: '2024-05-16', score: '92%' },
 ]
 
 const recommendedActions = [
@@ -57,10 +26,15 @@ const notifications = [
 
 export default function CandidateDashboardPage() {
   const { pathname } = useLocation()
+  const { user } = useAuth()
 
-  // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null)
   const menuRef = useRef(null)
+
+  const [loading, setLoading] = useState(true)
+  const [verifications, setVerifications] = useState([])
+  const [attempts, setAttempts] = useState([])
+  const [assessments, setAssessments] = useState([])
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -72,15 +46,88 @@ export default function CandidateDashboardPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  useEffect(() => {
+    async function loadDashboardData() {
+      try {
+        const [verificationsData, attemptsData, assessmentsData] = await Promise.all([
+          api.get('/api/skill-verifications/me'),
+          api.get('/api/assessments/attempts/me'),
+          api.get('/api/assessments'),
+        ])
+        setVerifications(verificationsData || [])
+        setAttempts(attemptsData || [])
+        setAssessments(assessmentsData || [])
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadDashboardData()
+  }, [])
+
   function toggleMenu(name) {
     setOpenMenu((m) => (m === name ? null : name))
+  }
+
+  const verifiedCount = verifications.filter((v) => v.status === 'Verified').length
+  const completedCount = attempts.filter((a) => a.status === 'Completed').length
+
+  const statCards = [
+    { label: 'Verified Skills', value: String(verifiedCount), sub: 'Skills backed by evidence', icon: 'shield-checkmark-outline' },
+    { label: 'Completed Assessments', value: String(completedCount), sub: 'Your assessment progress', icon: 'document-text-outline' },
+    { label: 'Skills Match', value: '—', sub: 'Select a career role to see this', icon: 'speedometer-outline' },
+    { label: 'Skill Gaps', value: '—', sub: 'Select a career role to see this', icon: 'trending-up-outline' },
+  ]
+
+  const verificationSkills = verifications.map((v) => {
+    const skillAttempts = attempts.filter(
+      (a) => a.assessment?.skillId === v.skillId && a.status === 'Completed'
+    )
+    const bestScore = skillAttempts.length > 0 ? Math.max(...skillAttempts.map((a) => a.score || 0)) : 0
+    return {
+      name: v.skill?.name || v.skillId,
+      pct: bestScore,
+      ok: v.status === 'Verified',
+    }
+  })
+
+  const attemptedAssessmentIds = new Set(
+    attempts.filter((a) => a.status === 'Completed').map((a) => a.assessmentId)
+  )
+  const recommendedAssessments = assessments
+    .filter((a) => !attemptedAssessmentIds.has(a.id))
+    .slice(0, 3)
+    .map((a) => ({ name: a.title, tag: '</>' }))
+
+  const recentResults = attempts
+    .filter((a) => a.status === 'Completed')
+    .slice()
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 5)
+    .map((a) => ({
+      name: a.assessment?.title || 'Assessment',
+      date: a.createdAt ? new Date(a.createdAt).toLocaleDateString() : '',
+      score: `${a.score}%`,
+    }))
+
+  const initials = user?.name
+    ? user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+    : '?'
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F5F7FB]">
+        <p className="text-sm text-gray-500">Loading your dashboard…</p>
+      </div>
+    )
   }
 
   return (
     <div className="flex min-h-screen bg-[#F5F7FB]">
       {/* Sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-gray-200 bg-white px-4 py-6 lg:fixed lg:left-0 lg:top-0 lg:h-screen lg:flex lg:overflow-y-auto">
-                    <Link to="/" className="flex items-center gap-2 px-2">
+        <Link to="/" className="flex items-center gap-2 px-2">
           <svg viewBox="0 0 32 32" className="h-7 w-7" aria-hidden="true">
             <rect width="32" height="32" rx="8" fill="#2563EB" />
             <path d="M16 7l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9v-6z" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round" />
@@ -179,9 +226,9 @@ export default function CandidateDashboardPage() {
             <div className="relative">
               <button onClick={() => toggleMenu('profile')} className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF1FF] text-xs font-semibold text-primary">
-                  CS
+                  {initials}
                 </div>
-                <span className="hidden text-sm font-medium text-gray-700 sm:block">Chethina Sri</span>
+                <span className="hidden text-sm font-medium text-gray-700 sm:block">{user?.name || 'Candidate'}</span>
                 <svg viewBox="0 0 24 24" className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -202,7 +249,7 @@ export default function CandidateDashboardPage() {
           {/* Greeting */}
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Good morning, Chethina Sri</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Good morning, {user?.name || 'there'}</h2>
               <p className="mt-1 text-sm text-gray-500">
                 Track your progress and build your verified career profile.
               </p>
@@ -237,69 +284,55 @@ export default function CandidateDashboardPage() {
                 <Link to="/candidate/career-role" className="text-sm font-semibold text-primary hover:underline">Change Role ›</Link>
               </div>
 
-              <div className="mt-4 flex items-center gap-3 border-b border-gray-200 pb-5">
+              <div className="mt-4 flex flex-col items-center gap-3 py-6 text-center">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-primary">
                   💼
                 </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Current role</p>
-                  <p className="font-semibold text-gray-900">Senior Frontend Engineer</p>
-                </div>
+                <p className="text-sm text-gray-500">You haven't selected a career role yet.</p>
+                <Link
+                  to="/candidate/career-role"
+                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"
+                >
+                  Choose a Career Role
+                </Link>
               </div>
-
-              <ul className="mt-4 space-y-3">
-                {careerSkills.map((s) => (
-                  <li key={s.name} className="flex items-center gap-3">
-                    <span
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-xs font-semibold"
-                      style={{ backgroundColor: s.bg, color: s.color }}
-                    >
-                      <ion-icon name={s.icon} className="h-6 w-6 items-center"></ion-icon>
-                    </span>
-                    <span className="flex-1 text-sm font-medium text-gray-900">{s.name}</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2.5 py-1 text-xs font-semibold text-[#15803D]">
-                      {s.level}
-                    </span>
-                  </li>
-                ))}
-              </ul>
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-6">
               <h3 className="text-base font-semibold text-gray-900">Skill Verification Process</h3>
               <p className="mt-1 text-sm text-gray-500">Keep building evidence for your career skills.</p>
 
-              <div className="mt-5 space-y-5">
-                {verificationSkills.map((s) => (
-                  <div key={s.name}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-gray-900">{s.name}</span>
-                      <div className="flex items-center gap-3">
-                        {s.ok ? (
-                          <span className="rounded-full bg-[#E8F5EE] px-2.5 py-1 text-xs font-semibold text-[#15803D]">
-                            Verified
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                            ⚠ Need verification
-                          </span>
-                        )}
-                        <span className="font-semibold text-gray-900">{s.pct}%</span>
+              {verificationSkills.length === 0 ? (
+                <p className="mt-5 text-sm text-gray-400">No skills tracked yet. Take an assessment to get started.</p>
+              ) : (
+                <div className="mt-5 space-y-5">
+                  {verificationSkills.map((s) => (
+                    <div key={s.name}>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium text-gray-900">{s.name}</span>
+                        <div className="flex items-center gap-3">
+                          {s.ok ? (
+                            <span className="rounded-full bg-[#E8F5EE] px-2.5 py-1 text-xs font-semibold text-[#15803D]">
+                              Verified
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                              ⚠ Need verification
+                            </span>
+                          )}
+                          <span className="font-semibold text-gray-900">{s.pct}%</span>
+                        </div>
+                      </div>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-gray-200">
+                        <div
+                          className={`h-1.5 rounded-full ${s.ok ? 'bg-primary' : 'bg-amber-400'}`}
+                          style={{ width: `${s.pct}%` }}
+                        />
                       </div>
                     </div>
-                    <div className="mt-1.5 h-1.5 rounded-full bg-gray-200">
-                      <div
-                        className={`h-1.5 rounded-full ${s.ok ? 'bg-primary' : 'bg-amber-400'}`}
-                        style={{ width: `${s.pct}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-5 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                ⚠ Data Analysis needs verification. Take an assessment to continue.
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -311,19 +344,23 @@ export default function CandidateDashboardPage() {
                 View all assessments ›
               </Link>
             </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              {recommendedAssessments.map((a) => (
-                <div key={a.name} className="rounded-lg border border-gray-200 p-4">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-base">
-                    {a.tag}
+            {recommendedAssessments.length === 0 ? (
+              <p className="mt-4 text-sm text-gray-400">You're all caught up — no new assessments right now.</p>
+            ) : (
+              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                {recommendedAssessments.map((a) => (
+                  <div key={a.name} className="rounded-lg border border-gray-200 p-4">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-base">
+                      {a.tag}
+                    </div>
+                    <p className="mt-3 text-sm font-semibold text-gray-900">{a.name}</p>
+                    <Link to="/candidate/assessments" className="mt-1 inline-block text-sm font-medium text-primary hover:underline">
+                      Start assessment ›
+                    </Link>
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-gray-900">{a.name}</p>
-                  <a href="#" className="mt-1 inline-block text-sm font-medium text-primary hover:underline">
-                    Start assessment ›
-                  </a>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Results + actions */}
@@ -335,30 +372,34 @@ export default function CandidateDashboardPage() {
                   View all results ›
                 </Link>
               </div>
-              <table className="mt-4 w-full text-left text-sm">
-                <thead>
-                  <tr className="text-xs uppercase tracking-wide text-gray-400">
-                    <th className="pb-2 font-medium">Name</th>
-                    <th className="pb-2 font-medium">Date</th>
-                    <th className="pb-2 font-medium">Score</th>
-                    <th className="pb-2 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentResults.map((r) => (
-                    <tr key={r.name} className="border-t border-gray-100">
-                      <td className="py-3 font-medium text-gray-900">{r.name}</td>
-                      <td className="py-3 text-gray-500">{r.date}</td>
-                      <td className="py-3 font-semibold text-gray-900">{r.score}</td>
-                      <td className="py-3">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2.5 py-1 text-xs font-semibold text-[#15803D]">
-                          ✓ Verified
-                        </span>
-                      </td>
+              {recentResults.length === 0 ? (
+                <p className="mt-4 text-sm text-gray-400">No completed assessments yet.</p>
+              ) : (
+                <table className="mt-4 w-full text-left text-sm">
+                  <thead>
+                    <tr className="text-xs uppercase tracking-wide text-gray-400">
+                      <th className="pb-2 font-medium">Name</th>
+                      <th className="pb-2 font-medium">Date</th>
+                      <th className="pb-2 font-medium">Score</th>
+                      <th className="pb-2 font-medium">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {recentResults.map((r, i) => (
+                      <tr key={`${r.name}-${i}`} className="border-t border-gray-100">
+                        <td className="py-3 font-medium text-gray-900">{r.name}</td>
+                        <td className="py-3 text-gray-500">{r.date}</td>
+                        <td className="py-3 font-semibold text-gray-900">{r.score}</td>
+                        <td className="py-3">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2.5 py-1 text-xs font-semibold text-[#15803D]">
+                            ✓ Completed
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-6">
