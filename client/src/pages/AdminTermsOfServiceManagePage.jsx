@@ -1,6 +1,7 @@
 // AdminTermsOfServiceManagePage.jsx
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import LogoutLink from "../components/LogoutLink";
 
 const navItems = [
   { label: "Dashboard", path: "/admin/dashboard" },

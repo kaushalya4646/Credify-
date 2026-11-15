@@ -1,6 +1,7 @@
 // CandidateProfileRecruiterViewPage.jsx
 import { Link, useLocation } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
+import LogoutLink from "../components/LogoutLink";
 
 const navItems = [
   { label: 'Dashboard', path: '/recruiter/dashboard' },

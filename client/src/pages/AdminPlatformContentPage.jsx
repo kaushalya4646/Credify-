@@ -1,5 +1,6 @@
 // src/pages/AdminPlatformContentPage.jsx
 import { Link, useLocation } from 'react-router-dom'
+import LogoutLink from "../components/LogoutLink";
 
 const navItems = [
   { label: 'Dashboard', path: '/admin/dashboard' },

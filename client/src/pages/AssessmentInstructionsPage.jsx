@@ -1,5 +1,6 @@
 // src/pages/AssessmentInstructionsPage.jsx
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom'
+import LogoutLink from "../components/LogoutLink";
 
 const navItems = [
   { label: 'Dashboard', path: '/candidate/dashboard' },
