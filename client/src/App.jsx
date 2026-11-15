@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import ProtectedRoute from './components/ProtectedRoute'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -67,43 +68,43 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
-      <Route path="/candidate/dashboard" element={<CandidateDashboardPage />} />
-      <Route path="/candidate/profile" element={<CandidateProfilePage />} />
-      <Route path="/candidate/career-role" element={<CareerRolePage />} />
-      <Route path="/candidate/assessments" element={<AssessmentsPage />} />
-      <Route path="/candidate/assessments/results" element={<AssessmentResultPage />} />
-      <Route path="/candidate/skill-gaps" element={<SkillGapsPage />} />
-      <Route path="/candidate/assessments/:id/screen" element={<AssessmentScreenPage />} />
+      <Route path="/candidate/dashboard" element={<ProtectedRoute role="CANDIDATE"><CandidateDashboardPage /></ProtectedRoute>} />
+      <Route path="/candidate/profile" element={<ProtectedRoute role="CANDIDATE"><CandidateProfilePage /></ProtectedRoute>} />
+      <Route path="/candidate/career-role" element={<ProtectedRoute role="CANDIDATE"><CareerRolePage /></ProtectedRoute>} />
+      <Route path="/candidate/assessments" element={<ProtectedRoute role="CANDIDATE"><AssessmentsPage /></ProtectedRoute>} />
+      <Route path="/candidate/assessments/results" element={<ProtectedRoute role="CANDIDATE"><AssessmentResultPage /></ProtectedRoute>} />
+      <Route path="/candidate/skill-gaps" element={<ProtectedRoute role="CANDIDATE"><SkillGapsPage /></ProtectedRoute>} />
+      <Route path="/candidate/assessments/:id/screen" element={<ProtectedRoute role="CANDIDATE"><AssessmentScreenPage /></ProtectedRoute>} />
 
-      <Route path="/recruiter/dashboard" element={<RecruiterDashboardPage />} />
-      <Route path="/recruiter/find-candidates" element={<FindCandidatesPage />} />
-      <Route path="/recruiter/jobs/create" element={<CreateJobVacancyPage />} />
-      <Route path="/recruiter/saved-candidates" element={<SavedCandidatesPage />} />
-      <Route path="/recruiter/profile" element={<RecruiterProfilePage />} />
-      <Route path="/recruiter/candidates/:id" element={<CandidateProfileRecruiterViewPage />} />
+      <Route path="/recruiter/dashboard" element={<ProtectedRoute role="RECRUITER"><RecruiterDashboardPage /></ProtectedRoute>} />
+      <Route path="/recruiter/find-candidates" element={<ProtectedRoute role="RECRUITER"><FindCandidatesPage /></ProtectedRoute>} />
+      <Route path="/recruiter/jobs/create" element={<ProtectedRoute role="RECRUITER"><CreateJobVacancyPage /></ProtectedRoute>} />
+      <Route path="/recruiter/saved-candidates" element={<ProtectedRoute role="RECRUITER"><SavedCandidatesPage /></ProtectedRoute>} />
+      <Route path="/recruiter/profile" element={<ProtectedRoute role="RECRUITER"><RecruiterProfilePage /></ProtectedRoute>} />
+      <Route path="/recruiter/candidates/:id" element={<ProtectedRoute role="RECRUITER"><CandidateProfileRecruiterViewPage /></ProtectedRoute>} />
 
-      <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-      <Route path="/admin/users" element={<AdminUsersPage />} />
-      <Route path="/admin/career-roles" element={<AdminCareerRolesPage />} />
-      <Route path="/admin/skills" element={<AdminSkillsPage />} />
-      <Route path="/admin/assessments" element={<AdminAssessmentsPage />} />
-      <Route path="/admin/reports" element={<AdminReportsPage />} />
-      <Route path="/admin/settings" element={<AdminSystemSettingsPage />} /> 
+      <Route path="/admin/dashboard" element={<ProtectedRoute role="ADMIN"><AdminDashboardPage /></ProtectedRoute>} />
+      <Route path="/admin/users" element={<ProtectedRoute role="ADMIN"><AdminUsersPage /></ProtectedRoute>} />
+      <Route path="/admin/career-roles" element={<ProtectedRoute role="ADMIN"><AdminCareerRolesPage /></ProtectedRoute>} />
+      <Route path="/admin/skills" element={<ProtectedRoute role="ADMIN"><AdminSkillsPage /></ProtectedRoute>} />
+      <Route path="/admin/assessments" element={<ProtectedRoute role="ADMIN"><AdminAssessmentsPage /></ProtectedRoute>} />
+      <Route path="/admin/reports" element={<ProtectedRoute role="ADMIN"><AdminReportsPage /></ProtectedRoute>} />
+      <Route path="/admin/settings" element={<ProtectedRoute role="ADMIN"><AdminSystemSettingsPage /></ProtectedRoute>} />
 
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/login/verify" element={<TwoFactorVerificationPage />} />
 
-      <Route path="/candidate/career-role/:id" element={<CareerRoleDetailsPage />} />
-      <Route path="/candidate/assessments/:id/start" element={<AssessmentInstructionsPage />} />
+      <Route path="/candidate/career-role/:id" element={<ProtectedRoute role="CANDIDATE"><CareerRoleDetailsPage /></ProtectedRoute>} />
+      <Route path="/candidate/assessments/:id/start" element={<ProtectedRoute role="CANDIDATE"><AssessmentInstructionsPage /></ProtectedRoute>} />
 
-      <Route path="/recruiter/jobs" element={<MyJobsPage />} />
+      <Route path="/recruiter/jobs" element={<ProtectedRoute role="RECRUITER"><MyJobsPage /></ProtectedRoute>} />
 
-      <Route path="/admin/assessments/editor" element={<AdminAssessmentEditorPage />} />
-      <Route path="/admin/content" element={<AdminPlatformContentPage />} />
+      <Route path="/admin/assessments/editor" element={<ProtectedRoute role="ADMIN"><AdminAssessmentEditorPage /></ProtectedRoute>} />
+      <Route path="/admin/content" element={<ProtectedRoute role="ADMIN"><AdminPlatformContentPage /></ProtectedRoute>} />
 
       <Route path="*" element={<NotFoundPage />} />
-      
+
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
       <Route path="/terms-of-service" element={<TermsOfServicePage />} />
@@ -119,15 +120,15 @@ export default function App() {
 
       <Route path="/help-center" element={<HelpCenterPage />} />
       <Route path="/feedback" element={<FeedbackPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
-      <Route path="/admin/help-center" element={<AdminHelpCenterManagePage />} />
-      <Route path="/admin/privacy-policy" element={<AdminPrivacyPolicyManagePage />} />
-      <Route path="/admin/terms-of-service" element={<AdminTermsOfServiceManagePage />} />
-      <Route path="/admin/about-us" element={<AdminAboutUsManagePage />} />
-      <Route path="/admin/feedback" element={<AdminFeedbackManagePage />} />
-      <Route path="/admin/profile" element={<AdminProfilePage />} />
-      
+      <Route path="/admin/help-center" element={<ProtectedRoute role="ADMIN"><AdminHelpCenterManagePage /></ProtectedRoute>} />
+      <Route path="/admin/privacy-policy" element={<ProtectedRoute role="ADMIN"><AdminPrivacyPolicyManagePage /></ProtectedRoute>} />
+      <Route path="/admin/terms-of-service" element={<ProtectedRoute role="ADMIN"><AdminTermsOfServiceManagePage /></ProtectedRoute>} />
+      <Route path="/admin/about-us" element={<ProtectedRoute role="ADMIN"><AdminAboutUsManagePage /></ProtectedRoute>} />
+      <Route path="/admin/feedback" element={<ProtectedRoute role="ADMIN"><AdminFeedbackManagePage /></ProtectedRoute>} />
+      <Route path="/admin/profile" element={<ProtectedRoute role="ADMIN"><AdminProfilePage /></ProtectedRoute>} />
+
     </Routes>
   )
 }
