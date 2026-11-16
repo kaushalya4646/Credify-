@@ -52,6 +52,7 @@ async function selectCareerRole(req, res) {
     if (!careerRoleId) {
       return res.status(400).json({ error: "careerRoleId is required." });
     }
+    console.log("req.user is:", req.user); // TEMPORARY — remove after debugging
     const updated = await prisma.candidateProfile.update({
       where: { userId: req.user.id },
       data: { targetCareerRoleId: careerRoleId },
