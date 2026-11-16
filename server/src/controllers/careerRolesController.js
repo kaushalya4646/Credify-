@@ -52,9 +52,8 @@ async function selectCareerRole(req, res) {
     if (!careerRoleId) {
       return res.status(400).json({ error: "careerRoleId is required." });
     }
-    console.log("req.user is:", req.user); // TEMPORARY — remove after debugging
     const updated = await prisma.candidateProfile.update({
-      where: { userId: req.user.id },
+      where: { userId: req.user.userId },
       data: { targetCareerRoleId: careerRoleId },
     });
     res.json(updated);
@@ -67,7 +66,7 @@ async function selectCareerRole(req, res) {
 async function getMySelectedCareerRole(req, res) {
   try {
     const profile = await prisma.candidateProfile.findUnique({
-      where: { userId: req.user.id },
+      where: { userId: req.user.userId },
       include: {
         targetCareerRole: {
           include: { skills: { include: { skill: true } } },
@@ -167,12 +166,4 @@ async function addSkillToCareerRole(req, res) {
   }
 }
 
-
-
-
-
-
-
-
-
-module.exports = { getCareerRoles, createCareerRole, updateCareerRole, deleteCareerRole, addSkillToCareerRole, getCareerRoleById, selectCareerRole, getMySelectedCareerRole  };
+module.exports = { getCareerRoles, createCareerRole, updateCareerRole, deleteCareerRole, addSkillToCareerRole, getCareerRoleById, selectCareerRole, getMySelectedCareerRole };
