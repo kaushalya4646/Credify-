@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", to: "/candidate/dashboard" },
@@ -8,58 +9,6 @@ const navItems = [
   { label: "Assessments", to: "/candidate/assessments" },
   { label: "Skill Gaps", to: "/candidate/skill-gaps" },
   { label: "My Profile", to: "/candidate/profile" },
-];
-
-const categories = [
-  "Software development",
-  "Data science & AI",
-  "Cloud & DevOps",
-  "Quality assurance",
-  "UX/UI",
-];
-
-// TODO (backend step): replace with career roles from the API, filtered by category and search text.
-const roles = [
-  {
-    id: "backend-developer",
-    name: "Backend developer",
-    desc: "API, database and server-side development",
-    skillsRequired: 12,
-    icons: [
-      { bg: "#DCFCE7", fg: "#15803D", glyph: "🗄" },
-      { bg: "#DBEAFE", fg: "#2563EB", glyph: "⚙" },
-    ],
-  },
-  {
-    id: "frontend-developer",
-    name: "Frontend developer",
-    desc: "Web interfaces and front-end technologies",
-    skillsRequired: 14,
-    icons: [
-      { bg: "#FFE4D6", fg: "#C2410C", glyph: "🖼" },
-      { bg: "#FFE4D6", fg: "#C2410C", glyph: "🧩" },
-    ],
-  },
-  {
-    id: "full-stack-developer",
-    name: "Full stack developer",
-    desc: "Front-end and back-end development",
-    skillsRequired: 26,
-    icons: [
-      { bg: "#DCFCE7", fg: "#15803D", glyph: "🗄" },
-      { bg: "#FFE4D6", fg: "#C2410C", glyph: "🖼" },
-    ],
-  },
-  {
-    id: "data-analyst",
-    name: "Data analyst",
-    desc: "Data analysis, visualization and SQL",
-    skillsRequired: 10,
-    icons: [
-      { bg: "#DCFCE7", fg: "#15803D", glyph: "🗄" },
-      { bg: "#DBEAFE", fg: "#2563EB", glyph: "📊" },
-    ],
-  },
 ];
 
 const notifications = [
@@ -74,12 +23,34 @@ const notifications = [
   },
 ];
 
+// Decorative icon palette — purely visual, cycles per role since there's no backend icon data.
+const ICON_PALETTE = [
+  [
+    { bg: "#DCFCE7", fg: "#15803D", glyph: "🗄" },
+    { bg: "#DBEAFE", fg: "#2563EB", glyph: "⚙" },
+  ],
+  [
+    { bg: "#FFE4D6", fg: "#C2410C", glyph: "🖼" },
+    { bg: "#FFE4D6", fg: "#C2410C", glyph: "🧩" },
+  ],
+  [
+    { bg: "#DCFCE7", fg: "#15803D", glyph: "🗄" },
+    { bg: "#FFE4D6", fg: "#C2410C", glyph: "🖼" },
+  ],
+  [
+    { bg: "#DCFCE7", fg: "#15803D", glyph: "🗄" },
+    { bg: "#DBEAFE", fg: "#2563EB", glyph: "📊" },
+  ],
+];
+
 export default function CareerRolePage() {
   const { pathname } = useLocation();
-  const [category, setCategory] = useState(categories[0]);
   const [search, setSearch] = useState("");
+  const [category, setCategory] = useState(null);
 
-  // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
+  const [loading, setLoading] = useState(true);
+  const [roles, setRoles] = useState([]);
+
   const [openMenu, setOpenMenu] = useState(null);
   const menuRef = useRef(null);
 
@@ -93,13 +64,38 @@ export default function CareerRolePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    async function loadRoles() {
+      try {
+        const data = await api.get("/api/career-roles");
+        setRoles(data || []);
+      } catch (err) {
+        console.error("Failed to load career roles:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadRoles();
+  }, []);
+
   function toggleMenu(name) {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
-  const visibleRoles = roles.filter((r) =>
-    r.name.toLowerCase().includes(search.trim().toLowerCase()),
-  );
+  const categories = [...new Set(roles.map((r) => r.category).filter(Boolean))];
+
+  const visibleRoles = roles.filter((r) => {
+    if (
+      search.trim() &&
+      !r.name.toLowerCase().includes(search.trim().toLowerCase())
+    ) {
+      return false;
+    }
+    if (category && r.category !== category) {
+      return false;
+    }
+    return true;
+  });
 
   return (
     <div className="flex min-h-screen bg-[#F5F7FB]">
@@ -350,75 +346,101 @@ export default function CareerRolePage() {
           </div>
 
           {/* Categories */}
-          <div>
-            <h2 className="mb-3 text-base font-semibold text-gray-900">
-              Categories
-            </h2>
-            <div className="flex flex-wrap gap-3">
-              {categories.map((c) => {
-                const active = category === c;
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => setCategory(c)}
-                    className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium ${
-                      active
-                        ? "border-primary bg-primary text-white"
-                        : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
-                  >
-                    {c}
-                  </button>
-                );
-              })}
+          {categories.length > 0 && (
+            <div>
+              <h2 className="mb-3 text-base font-semibold text-gray-900">
+                Categories
+              </h2>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCategory(null)}
+                  className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium ${
+                    category === null
+                      ? "border-primary bg-primary text-white"
+                      : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  All
+                </button>
+                {categories.map((c) => {
+                  const active = category === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCategory(c)}
+                      className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium ${
+                        active
+                          ? "border-primary bg-primary text-white"
+                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Role cards */}
-          <div className="grid gap-5 md:grid-cols-2">
-            {visibleRoles.map((r) => (
-              <div
-                key={r.id}
-                className="flex flex-col rounded-xl border border-gray-200 bg-white p-6"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-lg font-bold text-gray-900">{r.name}</h3>
-                  <span className="shrink-0 rounded-full bg-[#E8F5EE] px-3 py-1 text-xs font-semibold text-[#15803D]">
-                    {r.skillsRequired} skills required
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-gray-500">{r.desc}</p>
-
-                <div className="mt-4 flex gap-2">
-                  {r.icons.map((ic, i) => (
-                    <span
-                      key={i}
-                      className="flex h-9 w-9 items-center justify-center rounded-lg text-base"
-                      style={{ backgroundColor: ic.bg, color: ic.fg }}
-                    >
-                      {ic.glyph}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-auto border-t border-gray-100 pt-4">
-                  <Link
-                    to={`/candidate/career-role/${r.id}`}
-                    className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+          {loading ? (
+            <p className="py-10 text-center text-sm text-gray-500">
+              Loading career roles…
+            </p>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2">
+              {visibleRoles.map((r, i) => {
+                const icons = ICON_PALETTE[i % ICON_PALETTE.length];
+                return (
+                  <div
+                    key={r.id}
+                    className="flex flex-col rounded-xl border border-gray-200 bg-white p-6"
                   >
-                    View details
-                    <span>›</span>
-                  </Link>
-                </div>
-              </div>
-            ))}
-            {visibleRoles.length === 0 && (
-              <p className="col-span-2 py-10 text-center text-sm text-gray-500">
-                No career roles match &ldquo;{search}&rdquo;.
-              </p>
-            )}
-          </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <h3 className="text-lg font-bold text-gray-900">
+                        {r.name}
+                      </h3>
+                      <span className="shrink-0 rounded-full bg-[#E8F5EE] px-3 py-1 text-xs font-semibold text-[#15803D]">
+                        {r.skillsRequired} skills required
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500">
+                      {r.description}
+                    </p>
+
+                    <div className="mt-4 flex gap-2">
+                      {icons.map((ic, idx) => (
+                        <span
+                          key={idx}
+                          className="flex h-9 w-9 items-center justify-center rounded-lg text-base"
+                          style={{ backgroundColor: ic.bg, color: ic.fg }}
+                        >
+                          {ic.glyph}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="mt-auto border-t border-gray-100 pt-4">
+                      <Link
+                        to={`/candidate/career-role/${r.id}`}
+                        className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
+                      >
+                        View details
+                        <span>›</span>
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+              {visibleRoles.length === 0 && (
+                <p className="col-span-2 py-10 text-center text-sm text-gray-500">
+                  No career roles match your filters.
+                </p>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>
