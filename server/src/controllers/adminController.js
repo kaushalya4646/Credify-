@@ -68,6 +68,9 @@ async function updateUser(req, res) {
     const { id } = req.params;
     const { name, email, role } = req.body;
 
+    const existing = await prisma.user.findUnique({ where: { id } });
+    console.log("findUnique result:", existing);
+
     const data = {};
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email;
