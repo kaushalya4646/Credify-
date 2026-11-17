@@ -73,6 +73,8 @@ async function updateUser(req, res) {
     if (email !== undefined) data.email = email;
     if (role !== undefined) data.role = role;
 
+    console.log("Updating user with id:", id, "data:", data);
+
     const user = await prisma.user.update({
       where: { id },
       data,
