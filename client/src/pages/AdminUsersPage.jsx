@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/admin/dashboard" },
@@ -99,60 +100,6 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-// TODO (backend step): replace with real users from the API.
-const initialUsers = [
-  {
-    initials: "NS",
-    name: "Nisha Saduni",
-    email: "saduni34@gmail.com",
-    type: "Candidate",
-    role: "Backend developer",
-    registered: "05/07/2026",
-    status: "Active",
-    verified: true,
-  },
-  {
-    initials: "RN",
-    name: "Raj Nazeer",
-    email: "rajnazeer@gmail.com",
-    type: "Recruiter",
-    role: "IT recruiter",
-    registered: "06/07/2026",
-    status: "Active",
-    verified: true,
-  },
-  {
-    initials: "PK",
-    name: "Pethum Kamal",
-    email: "kamalpathum@gmail.com",
-    type: "Candidate",
-    role: "Backend developer",
-    registered: "08/08/2026",
-    status: "Active",
-    verified: true,
-  },
-  {
-    initials: "SS",
-    name: "Saku Seya",
-    email: "sakuseya@gmail.com",
-    type: "Recruiter",
-    role: "IT recruiter",
-    registered: "09/08/2026",
-    status: "Active",
-    verified: true,
-  },
-  {
-    initials: "NS",
-    name: "Nimal Sadun",
-    email: "nimalsadun@gmail.com",
-    type: "Recruiter",
-    role: "IT recruiter",
-    registered: "19/09/2026",
-    status: "Active",
-    verified: true,
-  },
-];
-
 const registrationDateOptions = [
   "Registration date",
   "Last 7 days",
@@ -161,15 +108,24 @@ const registrationDateOptions = [
   "This year",
 ];
 
-function parseRegisteredDate(str) {
-  // format is DD/MM/YYYY
-  const [day, month, year] = str.split("/").map(Number);
-  return new Date(year, month - 1, day);
+function roleLabel(role) {
+  if (!role) return "";
+  return role.charAt(0) + role.slice(1).toLowerCase();
 }
 
-function matchesRegistrationDate(registered, filterValue, today) {
+function initialsFor(name) {
+  if (!name) return "?";
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function matchesRegistrationDate(createdAt, filterValue, today) {
   if (filterValue === "Registration date") return true;
-  const date = parseRegisteredDate(registered);
+  const date = new Date(createdAt);
   const diffDays = (today - date) / (1000 * 60 * 60 * 24);
   if (filterValue === "Last 7 days") return diffDays <= 7;
   if (filterValue === "Last 30 days") return diffDays <= 30;
@@ -180,7 +136,9 @@ function matchesRegistrationDate(registered, filterValue, today) {
 }
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState(initialUsers);
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState([]);
+
   const [searchText, setSearchText] = useState("");
   const [userType, setUserType] = useState("User type");
   const [accountStatus, setAccountStatus] = useState("Account status");
@@ -190,7 +148,6 @@ export default function AdminUsersPage() {
   const [deletingUser, setDeletingUser] = useState(null);
   const [viewingUser, setViewingUser] = useState(null);
 
-  // header dropdown state: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
   const menuRef = useRef(null);
 
@@ -203,6 +160,21 @@ export default function AdminUsersPage() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  async function loadUsers() {
+    try {
+      const data = await api.get("/api/admin/users");
+      setUsers(data || []);
+    } catch (err) {
+      console.error("Failed to load users:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function toggleMenu(name) {
     setOpenMenu((m) => (m === name ? null : name));
@@ -217,32 +189,48 @@ export default function AdminUsersPage() {
       !u.email.toLowerCase().includes(searchText.toLowerCase())
     )
       return false;
-    if (userType !== "User type" && u.type !== userType) return false;
-    if (accountStatus !== "Account status" && u.status !== accountStatus)
-      return false;
-    if (!matchesRegistrationDate(u.registered, registrationDate, today))
-      return false;
+    if (userType !== "User type" && roleLabel(u.role) !== userType) return false;
+    const status = u.isActive ? "Active" : "Suspended";
+    if (accountStatus !== "Account status" && status !== accountStatus) return false;
+    if (!matchesRegistrationDate(u.createdAt, registrationDate, today)) return false;
     return true;
   });
+
+  const totalUsers = users.length;
+  const candidateCount = users.filter((u) => u.role === "CANDIDATE").length;
+  const recruiterCount = users.filter((u) => u.role === "RECRUITER").length;
+  const adminCount = users.filter((u) => u.role === "ADMIN").length;
 
   function toggleRowMenu(index) {
     setOpenMenuIndex((prev) => (prev === index ? null : index));
   }
 
-  function toggleSuspend(index) {
-    setUsers((prev) =>
-      prev.map((u, i) =>
-        i === index
-          ? { ...u, status: u.status === "Active" ? "Suspended" : "Active" }
-          : u,
-      ),
-    );
+  async function toggleSuspend(user) {
     setOpenMenuIndex(null);
+    try {
+      const updated = await api.put(`/api/admin/users/${user.id}/status`, {
+        isActive: !user.isActive,
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, isActive: updated.isActive } : u))
+      );
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      alert("Could not update this user's status.");
+    }
   }
 
-  function resetPassword(user) {
+  async function resetPassword(user) {
     setOpenMenuIndex(null);
-    alert(`Password reset link sent to ${user.email}`);
+    try {
+      const result = await api.post(`/api/admin/users/${user.id}/reset-password`, {});
+      alert(
+        `Password reset for ${user.email}.\n\nTemporary password: ${result.tempPassword}\n\nShare this with the user — there is no automatic email yet.`
+      );
+    } catch (err) {
+      console.error("Failed to reset password:", err);
+      alert("Could not reset this user's password.");
+    }
   }
 
   function viewDetails(user) {
@@ -250,19 +238,33 @@ export default function AdminUsersPage() {
     setViewingUser(user);
   }
 
-  function saveEdit(e) {
+  async function saveEdit(e) {
     e.preventDefault();
-    setUsers((prev) =>
-      prev.map((u, i) =>
-        i === editingUser.index ? { ...editingUser.data } : u,
-      ),
-    );
-    setEditingUser(null);
+    try {
+      const updated = await api.put(`/api/admin/users/${editingUser.id}`, {
+        name: editingUser.name,
+        email: editingUser.email,
+        role: editingUser.role,
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.id === editingUser.id ? { ...u, ...updated } : u))
+      );
+      setEditingUser(null);
+    } catch (err) {
+      console.error("Failed to update user:", err);
+      alert("Could not save changes for this user.");
+    }
   }
 
-  function confirmDelete() {
-    setUsers((prev) => prev.filter((_, i) => i !== deletingUser.index));
-    setDeletingUser(null);
+  async function confirmDelete() {
+    try {
+      await api.delete(`/api/admin/users/${deletingUser.id}`);
+      setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id));
+      setDeletingUser(null);
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      alert("Could not remove this user.");
+    }
   }
 
   return (
@@ -302,36 +304,11 @@ export default function AdminUsersPage() {
               </button>
               {openMenu === "help" && (
                 <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
-                  <Link
-                    to="/admin/help-center"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Manage help center
-                  </Link>
-                  <Link
-                    to="/admin/privacy-policy"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Manage privacy policy
-                  </Link>
-                  <Link
-                    to="/admin/terms-of-service"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Manage terms of service
-                  </Link>
-                  <Link
-                    to="/admin/about-us"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Manage about us
-                  </Link>
-                  <Link
-                    to="/admin/feedback"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Manage feedback
-                  </Link>
+                  <Link to="/admin/help-center" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage help center</Link>
+                  <Link to="/admin/privacy-policy" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage privacy policy</Link>
+                  <Link to="/admin/terms-of-service" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage terms of service</Link>
+                  <Link to="/admin/about-us" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage about us</Link>
+                  <Link to="/admin/feedback" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage feedback</Link>
                 </div>
               )}
             </div>
@@ -367,24 +344,13 @@ export default function AdminUsersPage() {
                   </p>
                   <div className="max-h-64 overflow-y-auto">
                     {notifications.map((n) => (
-                      <a
-                        key={n.title}
-                        href="#"
-                        className="block border-t border-gray-100 px-4 py-2.5 text-sm hover:bg-gray-50"
-                      >
-                        <span className="block font-medium text-gray-900">
-                          {n.title}
-                        </span>
-                        <span className="block text-xs text-gray-500">
-                          {n.detail}
-                        </span>
+                      <a key={n.title} href="#" className="block border-t border-gray-100 px-4 py-2.5 text-sm hover:bg-gray-50">
+                        <span className="block font-medium text-gray-900">{n.title}</span>
+                        <span className="block text-xs text-gray-500">{n.detail}</span>
                       </a>
                     ))}
                   </div>
-                  <Link
-                    to="#"
-                    className="block border-t border-gray-100 px-4 py-2 text-center text-sm font-semibold text-primary hover:underline"
-                  >
+                  <Link to="#" className="block border-t border-gray-100 px-4 py-2 text-center text-sm font-semibold text-primary hover:underline">
                     View all notifications
                   </Link>
                 </div>
@@ -411,27 +377,13 @@ export default function AdminUsersPage() {
                   strokeWidth="2"
                   aria-hidden="true"
                 >
-                  <path
-                    d="M6 9l6 6 6-6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
               {openMenu === "profile" && (
                 <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
-                  <Link
-                    to="/admin/profile"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    My Profile
-                  </Link>
-                  <Link
-                    to="/admin/settings"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    Settings
-                  </Link>
+                  <Link to="/admin/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Profile</Link>
+                  <Link to="/admin/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Settings</Link>
                   <div className="my-1 border-t border-gray-100" />
                   <LogoutLink className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-gray-50" />
                 </div>
@@ -444,27 +396,25 @@ export default function AdminUsersPage() {
           <div className="grid grid-cols-4 gap-6">
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Total users</p>
-              <p className="text-3xl font-bold text-slate-900">2,486</p>
-              <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                ↑ 12.5%
-              </span>
+              <p className="text-3xl font-bold text-slate-900">{totalUsers}</p>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Candidates</p>
-              <p className="text-3xl font-bold text-slate-900">2,214</p>
-              <p className="text-xs text-slate-500 mt-2">89% of users</p>
+              <p className="text-3xl font-bold text-slate-900">{candidateCount}</p>
+              <p className="text-xs text-slate-500 mt-2">
+                {totalUsers ? Math.round((candidateCount / totalUsers) * 100) : 0}% of users
+              </p>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Recruiters</p>
-              <p className="text-3xl font-bold text-slate-900">248</p>
-              <p className="text-xs text-slate-500 mt-2">10% of users</p>
+              <p className="text-3xl font-bold text-slate-900">{recruiterCount}</p>
+              <p className="text-xs text-slate-500 mt-2">
+                {totalUsers ? Math.round((recruiterCount / totalUsers) * 100) : 0}% of users
+              </p>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Admins</p>
-              <p className="text-3xl font-bold text-slate-900">24</p>
-              <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                ✓ All active
-              </span>
+              <p className="text-3xl font-bold text-slate-900">{adminCount}</p>
             </div>
           </div>
 
@@ -509,116 +459,128 @@ export default function AdminUsersPage() {
               </select>
             </div>
 
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate-500 text-xs">
-                  <th className="pb-2 font-semibold">User</th>
-                  <th className="pb-2 font-semibold">Email</th>
-                  <th className="pb-2 font-semibold">Account type</th>
-                  <th className="pb-2 font-semibold">Career role</th>
-                  <th className="pb-2 font-semibold">Verification</th>
-                  <th className="pb-2 font-semibold">Status</th>
-                  <th className="pb-2 font-semibold">Registered</th>
-                  <th className="pb-2 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map((u, i) => (
-                  <tr key={u.email + i} className="border-t border-slate-100">
-                    <td className="py-3 flex items-center gap-2 font-semibold text-slate-900">
-                      <span className="w-7 h-7 rounded-full bg-blue-50 text-primary text-[10px] font-semibold flex items-center justify-center">
-                        {u.initials}
-                      </span>
-                      {u.name}
-                    </td>
-                    <td className="text-slate-600">{u.email}</td>
-                    <td className="text-slate-900">{u.type}</td>
-                    <td className="text-slate-600">{u.role}</td>
-                    <td>
-                      <span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                        {u.verified ? "✓ Verified" : "Unverified"}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          u.status === "Active"
-                            ? "bg-green-50 text-green-700"
-                            : "bg-red-50 text-red-700"
-                        }`}
-                      >
-                        {u.status}
-                      </span>
-                    </td>
-                    <td className="text-slate-600">{u.registered}</td>
-                    <td className="relative">
-                      <div className="flex gap-2 text-slate-400">
-                        <button
-                          onClick={() => toggleRowMenu(i)}
-                          className="hover:text-slate-600"
-                        >
-                          ⋯
-                        </button>
-                        <button
-                          onClick={() =>
-                            setEditingUser({ index: i, data: { ...u } })
-                          }
-                          className="text-primary hover:text-primary-dark"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() =>
-                            setDeletingUser({ index: i, name: u.name })
-                          }
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          ✕
-                        </button>
-                      </div>
+            {loading ? (
+              <p className="py-8 text-center text-sm text-slate-500">Loading users…</p>
+            ) : (
+              <>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500 text-xs">
+                      <th className="pb-2 font-semibold">User</th>
+                      <th className="pb-2 font-semibold">Email</th>
+                      <th className="pb-2 font-semibold">Account type</th>
+                      <th className="pb-2 font-semibold">Career role</th>
+                      <th className="pb-2 font-semibold">Verification</th>
+                      <th className="pb-2 font-semibold">Status</th>
+                      <th className="pb-2 font-semibold">Registered</th>
+                      <th className="pb-2 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((u, i) => (
+                      <tr key={u.id} className="border-t border-slate-100">
+                        <td className="py-3 flex items-center gap-2 font-semibold text-slate-900">
+                          <span className="w-7 h-7 rounded-full bg-blue-50 text-primary text-[10px] font-semibold flex items-center justify-center">
+                            {initialsFor(u.name)}
+                          </span>
+                          {u.name}
+                        </td>
+                        <td className="text-slate-600">{u.email}</td>
+                        <td className="text-slate-900">{roleLabel(u.role)}</td>
+                        <td className="text-slate-600">{u.careerRole || "—"}</td>
+                        <td>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              u.verified
+                                ? "bg-green-50 text-green-700"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {u.verified ? "✓ Verified" : "Unverified"}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              u.isActive
+                                ? "bg-green-50 text-green-700"
+                                : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {u.isActive ? "Active" : "Suspended"}
+                          </span>
+                        </td>
+                        <td className="text-slate-600">
+                          {new Date(u.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="relative">
+                          <div className="flex gap-2 text-slate-400">
+                            <button
+                              onClick={() => toggleRowMenu(i)}
+                              className="hover:text-slate-600"
+                            >
+                              ⋯
+                            </button>
+                            <button
+                              onClick={() =>
+                                setEditingUser({ ...u })
+                              }
+                              className="text-primary hover:text-primary-dark"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              onClick={() =>
+                                setDeletingUser({ id: u.id, name: u.name })
+                              }
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              ✕
+                            </button>
+                          </div>
 
-                      {openMenuIndex === i && (
-                        <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
-                          <button
-                            onClick={() => viewDetails(u)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            View details
-                          </button>
-                          <button
-                            onClick={() => toggleSuspend(i)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            {u.status === "Active"
-                              ? "Suspend account"
-                              : "Activate account"}
-                          </button>
-                          <button
-                            onClick={() => resetPassword(u)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            Reset password
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {filteredUsers.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="py-8 text-center text-sm text-slate-500"
-                    >
-                      No users match these filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <p className="text-xs text-slate-500 mt-4">
-              Showing {filteredUsers.length} of 2,486 users
-            </p>
+                          {openMenuIndex === i && (
+                            <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
+                              <button
+                                onClick={() => viewDetails(u)}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                View details
+                              </button>
+                              <button
+                                onClick={() => toggleSuspend(u)}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                {u.isActive ? "Suspend account" : "Activate account"}
+                              </button>
+                              <button
+                                onClick={() => resetPassword(u)}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                Reset password
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {filteredUsers.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="py-8 text-center text-sm text-slate-500"
+                        >
+                          No users match these filters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                <p className="text-xs text-slate-500 mt-4">
+                  Showing {filteredUsers.length} of {totalUsers} users
+                </p>
+              </>
+            )}
           </div>
         </main>
       </div>
@@ -632,7 +594,7 @@ export default function AdminUsersPage() {
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-primary">
-                {viewingUser.initials}
+                {initialsFor(viewingUser.name)}
               </div>
               <div>
                 <p className="text-sm font-semibold text-slate-900">
@@ -646,37 +608,43 @@ export default function AdminUsersPage() {
               <div>
                 <p className="text-xs text-slate-500 mb-1">Account type</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingUser.type}
+                  {roleLabel(viewingUser.role)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Career role</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingUser.role}
+                  {viewingUser.careerRole || "—"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Status</p>
                 <span
                   className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    viewingUser.status === "Active"
+                    viewingUser.isActive
                       ? "bg-green-50 text-green-700"
                       : "bg-red-50 text-red-700"
                   }`}
                 >
-                  {viewingUser.status}
+                  {viewingUser.isActive ? "Active" : "Suspended"}
                 </span>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Verification</p>
-                <span className="inline-block px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                <span
+                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    viewingUser.verified
+                      ? "bg-green-50 text-green-700"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
                   {viewingUser.verified ? "✓ Verified" : "Unverified"}
                 </span>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Registered</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingUser.registered}
+                  {new Date(viewingUser.createdAt).toLocaleDateString()}
                 </p>
               </div>
             </div>
@@ -694,7 +662,7 @@ export default function AdminUsersPage() {
       {/* Edit user modal */}
       {editingUser && (
         <Modal
-          title={`Edit ${editingUser.data.name}`}
+          title={`Edit ${editingUser.name}`}
           onClose={() => setEditingUser(null)}
         >
           <form onSubmit={saveEdit} className="space-y-4">
@@ -703,12 +671,9 @@ export default function AdminUsersPage() {
                 Full name
               </label>
               <input
-                value={editingUser.data.name}
+                value={editingUser.name}
                 onChange={(e) =>
-                  setEditingUser((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, name: e.target.value },
-                  }))
+                  setEditingUser((prev) => ({ ...prev, name: e.target.value }))
                 }
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
@@ -719,12 +684,9 @@ export default function AdminUsersPage() {
               </label>
               <input
                 type="email"
-                value={editingUser.data.email}
+                value={editingUser.email}
                 onChange={(e) =>
-                  setEditingUser((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, email: e.target.value },
-                  }))
+                  setEditingUser((prev) => ({ ...prev, email: e.target.value }))
                 }
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
@@ -734,52 +696,24 @@ export default function AdminUsersPage() {
                 Account type
               </label>
               <select
-                value={editingUser.data.type}
+                value={editingUser.role}
                 onChange={(e) =>
-                  setEditingUser((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, type: e.target.value },
-                  }))
+                  setEditingUser((prev) => ({ ...prev, role: e.target.value }))
                 }
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               >
-                <option>Candidate</option>
-                <option>Recruiter</option>
-                <option>Admin</option>
+                <option value="CANDIDATE">Candidate</option>
+                <option value="RECRUITER">Recruiter</option>
+                <option value="ADMIN">Admin</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Career role
               </label>
-              <input
-                value={editingUser.data.role}
-                onChange={(e) =>
-                  setEditingUser((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, role: e.target.value },
-                  }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Status
-              </label>
-              <select
-                value={editingUser.data.status}
-                onChange={(e) =>
-                  setEditingUser((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, status: e.target.value },
-                  }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              >
-                <option>Active</option>
-                <option>Suspended</option>
-              </select>
+              <p className="w-full px-4 py-2.5 rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-500">
+                {editingUser.careerRole || "— (set by the candidate)"}
+              </p>
             </div>
             <button
               type="submit"
