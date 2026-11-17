@@ -35,6 +35,7 @@ export default function CandidateDashboardPage() {
   const [verifications, setVerifications] = useState([])
   const [attempts, setAttempts] = useState([])
   const [assessments, setAssessments] = useState([])
+  const [selectedRole, setSelectedRole] = useState(null)
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -49,14 +50,16 @@ export default function CandidateDashboardPage() {
   useEffect(() => {
     async function loadDashboardData() {
       try {
-        const [verificationsData, attemptsData, assessmentsData] = await Promise.all([
+        const [verificationsData, attemptsData, assessmentsData, selectedRoleData] = await Promise.all([
           api.get('/api/skill-verifications/me'),
           api.get('/api/assessments/attempts/me'),
           api.get('/api/assessments'),
+          api.get('/api/career-roles/me/selected'),
         ])
         setVerifications(verificationsData || [])
         setAttempts(attemptsData || [])
         setAssessments(assessmentsData || [])
+        setSelectedRole(selectedRoleData)
       } catch (err) {
         console.error('Failed to load dashboard data:', err)
       } finally {
@@ -73,11 +76,31 @@ export default function CandidateDashboardPage() {
   const verifiedCount = verifications.filter((v) => v.status === 'Verified').length
   const completedCount = attempts.filter((a) => a.status === 'Completed').length
 
+  // Match % and gap count against the selected role's required skills, if any.
+  let matchPct = null
+  let gapCount = null
+  if (selectedRole) {
+    const required = selectedRole.requiredSkills || []
+    const matched = required.filter((s) => verifications.some((v) => v.skillId === s.skillId && v.status === 'Verified'))
+    matchPct = required.length ? Math.round((matched.length / required.length) * 100) : 0
+    gapCount = required.length - matched.length
+  }
+
   const statCards = [
     { label: 'Verified Skills', value: String(verifiedCount), sub: 'Skills backed by evidence', icon: 'shield-checkmark-outline' },
     { label: 'Completed Assessments', value: String(completedCount), sub: 'Your assessment progress', icon: 'document-text-outline' },
-    { label: 'Skills Match', value: '—', sub: 'Select a career role to see this', icon: 'speedometer-outline' },
-    { label: 'Skill Gaps', value: '—', sub: 'Select a career role to see this', icon: 'trending-up-outline' },
+    {
+      label: 'Skills Match',
+      value: selectedRole ? `${matchPct}%` : '—',
+      sub: selectedRole ? `vs. ${selectedRole.name}` : 'Select a career role to see this',
+      icon: 'speedometer-outline',
+    },
+    {
+      label: 'Skill Gaps',
+      value: selectedRole ? String(gapCount) : '—',
+      sub: selectedRole ? 'Skills left to verify' : 'Select a career role to see this',
+      icon: 'trending-up-outline',
+    },
   ]
 
   const verificationSkills = verifications.map((v) => {
@@ -284,18 +307,36 @@ export default function CandidateDashboardPage() {
                 <Link to="/candidate/career-role" className="text-sm font-semibold text-primary hover:underline">Change Role ›</Link>
               </div>
 
-              <div className="mt-4 flex flex-col items-center gap-3 py-6 text-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-primary">
-                  💼
+              {selectedRole ? (
+                <div className="mt-4 flex flex-col items-center gap-3 py-6 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-primary">
+                    💼
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">{selectedRole.name}</p>
+                  <p className="text-sm text-gray-500">
+                    {matchPct}% match · {gapCount} skill{gapCount === 1 ? '' : 's'} left to verify
+                  </p>
+                  <Link
+                    to="/candidate/skill-gaps"
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"
+                  >
+                    View Skill Gaps
+                  </Link>
                 </div>
-                <p className="text-sm text-gray-500">You haven't selected a career role yet.</p>
-                <Link
-                  to="/candidate/career-role"
-                  className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"
-                >
-                  Choose a Career Role
-                </Link>
-              </div>
+              ) : (
+                <div className="mt-4 flex flex-col items-center gap-3 py-6 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-primary">
+                    💼
+                  </div>
+                  <p className="text-sm text-gray-500">You haven't selected a career role yet.</p>
+                  <Link
+                    to="/candidate/career-role"
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"
+                  >
+                    Choose a Career Role
+                  </Link>
+                </div>
+              )}
             </div>
 
             <div className="rounded-xl border border-gray-200 bg-white p-6">
