@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/admin/dashboard" },
@@ -108,73 +109,26 @@ const CATEGORY_OPTIONS = [
 ];
 const STATUS_OPTIONS = ["Active", "Draft", "Inactive"];
 
-function todayFormatted() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-}
-
 function emptyRoleForm() {
   return {
     name: "",
     category: CATEGORY_OPTIONS[0],
     status: "Draft",
     skillsText: "",
-    candidates: 0,
-    assessments: 0,
   };
 }
 
-// TODO (backend step): replace with real career roles from the API.
-const initialRoles = [
-  {
-    name: "Backend Developer",
-    category: "Software development",
-    status: "Active",
-    skills: ["Java", "Spring Boot", "SQL", "REST APIs"],
-    candidates: 428,
-    assessments: 8,
-    updated: "05/07/2026",
-  },
-  {
-    name: "Frontend Developer",
-    category: "Software development",
-    status: "Active",
-    skills: ["React", "JavaScript", "CSS", "Tailwind CSS"],
-    candidates: 392,
-    assessments: 9,
-    updated: "06/07/2026",
-  },
-  {
-    name: "Data Analyst",
-    category: "Data & analytics",
-    status: "Active",
-    skills: ["SQL", "Excel", "Power BI", "Python"],
-    candidates: 186,
-    assessments: 6,
-    updated: "08/08/2026",
-  },
-  {
-    name: "Data Scientist",
-    category: "Data & analytics",
-    status: "Active",
-    skills: ["Python", "Machine Learning", "Statistics", "SQL"],
-    candidates: 186,
-    assessments: 6,
-    updated: "09/08/2026",
-  },
-  {
-    name: "Data Engineer",
-    category: "Data & analytics",
-    status: "Active",
-    skills: ["Python", "ETL", "SQL", "Cloud platforms"],
-    candidates: 194,
-    assessments: 5,
-    updated: "19/09/2026",
-  },
-];
+function parseSkills(text) {
+  return text
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
 
 export default function AdminCareerRolesPage() {
-  const [roles, setRoles] = useState(initialRoles);
+  const [loading, setLoading] = useState(true);
+  const [roles, setRoles] = useState([]);
+
   const [searchText, setSearchText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Category");
   const [statusFilter, setStatusFilter] = useState("Status");
@@ -183,11 +137,10 @@ export default function AdminCareerRolesPage() {
   const [roleForm, setRoleForm] = useState(emptyRoleForm());
 
   const [openMenuIndex, setOpenMenuIndex] = useState(null);
-  const [editingRole, setEditingRole] = useState(null); // { index, data: { ...role, skillsText } }
-  const [deletingRole, setDeletingRole] = useState(null); // { index, name }
+  const [editingRole, setEditingRole] = useState(null); // { id, name, category, status, skillsText }
+  const [deletingRole, setDeletingRole] = useState(null); // { id, name }
   const [viewingRole, setViewingRole] = useState(null);
 
-  // header dropdown state: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
   const menuRef = useRef(null);
 
@@ -201,13 +154,28 @@ export default function AdminCareerRolesPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    loadRoles();
+  }, []);
+
+  async function loadRoles() {
+    try {
+      const data = await api.get("/api/career-roles");
+      setRoles(data || []);
+    } catch (err) {
+      console.error("Failed to load career roles:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function toggleHeaderMenu(name) {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
   const categoryOptions = [
     "Category",
-    ...new Set(roles.map((r) => r.category)),
+    ...new Set(roles.map((r) => r.category).filter(Boolean)),
   ];
   const statusOptions = ["Status", ...new Set(roles.map((r) => r.status))];
 
@@ -220,12 +188,12 @@ export default function AdminCareerRolesPage() {
     return true;
   });
 
-  function parseSkills(text) {
-    return text
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
+  const activeCount = roles.filter((r) => r.status === "Active").length;
+  const draftCount = roles.filter((r) => r.status === "Draft").length;
+  const mostSelected = roles.reduce(
+    (best, r) => (!best || r.candidates > best.candidates ? r : best),
+    null
+  );
 
   // ---- Add career role ----
   function openAddRole() {
@@ -233,19 +201,21 @@ export default function AdminCareerRolesPage() {
     setAddingRole(true);
   }
 
-  function saveNewRole(e) {
+  async function saveNewRole(e) {
     e.preventDefault();
-    const newRole = {
-      name: roleForm.name || "Untitled role",
-      category: roleForm.category,
-      status: roleForm.status,
-      skills: parseSkills(roleForm.skillsText),
-      candidates: 0,
-      assessments: 0,
-      updated: todayFormatted(),
-    };
-    setRoles((prev) => [newRole, ...prev]);
-    setAddingRole(false);
+    try {
+      await api.post("/api/career-roles", {
+        name: roleForm.name || "Untitled role",
+        category: roleForm.category,
+        status: roleForm.status,
+        skillNames: parseSkills(roleForm.skillsText),
+      });
+      setAddingRole(false);
+      await loadRoles();
+    } catch (err) {
+      console.error("Failed to create career role:", err);
+      alert(err?.message || "Could not create this career role.");
+    }
   }
 
   // ---- Row actions ----
@@ -258,62 +228,72 @@ export default function AdminCareerRolesPage() {
     setViewingRole(r);
   }
 
-  function duplicateRole(index) {
-    setRoles((prev) => {
-      const original = prev[index];
-      const copy = {
-        ...original,
-        name: `${original.name} (copy)`,
-        candidates: 0,
-        updated: todayFormatted(),
-      };
-      const next = [...prev];
-      next.splice(index + 1, 0, copy);
-      return next;
+  async function duplicateRole(r) {
+    setOpenMenuIndex(null);
+    try {
+      await api.post("/api/career-roles", {
+        name: `${r.name} (copy)`,
+        category: r.category,
+        status: "Draft",
+        skillNames: r.skills || [],
+      });
+      await loadRoles();
+    } catch (err) {
+      console.error("Failed to duplicate career role:", err);
+      alert(err?.message || "Could not duplicate this career role.");
+    }
+  }
+
+  async function toggleStatus(r) {
+    setOpenMenuIndex(null);
+    const newStatus = r.status === "Active" ? "Inactive" : "Active";
+    try {
+      await api.put(`/api/career-roles/${r.id}`, { status: newStatus });
+      await loadRoles();
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      alert("Could not update this role's status.");
+    }
+  }
+
+  function openEditRole(r) {
+    setEditingRole({
+      id: r.id,
+      name: r.name,
+      category: r.category || CATEGORY_OPTIONS[0],
+      status: r.status,
+      skillsText: (r.skills || []).join(", "),
     });
     setOpenMenuIndex(null);
   }
 
-  function toggleStatus(index) {
-    setRoles((prev) =>
-      prev.map((r, i) =>
-        i === index
-          ? { ...r, status: r.status === "Active" ? "Inactive" : "Active" }
-          : r,
-      ),
-    );
-    setOpenMenuIndex(null);
-  }
-
-  function openEditRole(index) {
-    const r = roles[index];
-    setEditingRole({ index, data: { ...r, skillsText: r.skills.join(", ") } });
-    setOpenMenuIndex(null);
-  }
-
-  function saveEdit(e) {
+  async function saveEdit(e) {
     e.preventDefault();
-    setRoles((prev) =>
-      prev.map((r, i) =>
-        i === editingRole.index
-          ? {
-              ...editingRole.data,
-              skills: parseSkills(editingRole.data.skillsText),
-              updated: todayFormatted(),
-            }
-          : r,
-      ),
-    );
-    setEditingRole(null);
+    try {
+      await api.put(`/api/career-roles/${editingRole.id}`, {
+        name: editingRole.name,
+        category: editingRole.category,
+        status: editingRole.status,
+        skillNames: parseSkills(editingRole.skillsText),
+      });
+      setEditingRole(null);
+      await loadRoles();
+    } catch (err) {
+      console.error("Failed to update career role:", err);
+      alert(err?.message || "Could not save changes for this role.");
+    }
   }
 
-  function confirmDelete() {
-    setRoles((prev) => prev.filter((_, i) => i !== deletingRole.index));
-    setDeletingRole(null);
+  async function confirmDelete() {
+    try {
+      await api.delete(`/api/career-roles/${deletingRole.id}`);
+      setDeletingRole(null);
+      await loadRoles();
+    } catch (err) {
+      console.error("Failed to delete career role:", err);
+      alert(err?.message || "Could not delete this career role.");
+    }
   }
-
-  const activeCount = roles.filter((r) => r.status === "Active").length;
-  const draftCount = roles.filter((r) => r.status === "Draft").length;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -361,36 +341,11 @@ export default function AdminCareerRolesPage() {
                 </button>
                 {openMenu === "help" && (
                   <div className="absolute right-0 top-full z-20 mt-2 w-64 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
-                    <Link
-                      to="/admin/help-center"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Manage help center
-                    </Link>
-                    <Link
-                      to="/admin/privacy-policy"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Manage privacy policy
-                    </Link>
-                    <Link
-                      to="/admin/terms-of-service"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Manage terms of service
-                    </Link>
-                    <Link
-                      to="/admin/about-us"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Manage about us
-                    </Link>
-                    <Link
-                      to="/admin/feedback"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Manage feedback
-                    </Link>
+                    <Link to="/admin/help-center" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage help center</Link>
+                    <Link to="/admin/privacy-policy" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage privacy policy</Link>
+                    <Link to="/admin/terms-of-service" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage terms of service</Link>
+                    <Link to="/admin/about-us" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage about us</Link>
+                    <Link to="/admin/feedback" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Manage feedback</Link>
                   </div>
                 )}
               </div>
@@ -479,18 +434,8 @@ export default function AdminCareerRolesPage() {
                 </button>
                 {openMenu === "profile" && (
                   <div className="absolute right-0 top-full z-20 mt-2 w-48 rounded-xl border border-gray-200 bg-white py-2 shadow-lg">
-                    <Link
-                      to="/admin/profile"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      My Profile
-                    </Link>
-                    <Link
-                      to="/admin/settings"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Settings
-                    </Link>
+                    <Link to="/admin/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">My Profile</Link>
+                    <Link to="/admin/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Settings</Link>
                     <div className="my-1 border-t border-gray-100" />
                     <LogoutLink className="block w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-gray-50" />
                   </div>
@@ -526,7 +471,9 @@ export default function AdminCareerRolesPage() {
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Most selected role</p>
               <p className="text-lg font-bold text-slate-900 mt-2">
-                Full-stack developer
+                {mostSelected && mostSelected.candidates > 0
+                  ? mostSelected.name
+                  : "—"}
               </p>
             </div>
           </div>
@@ -562,117 +509,125 @@ export default function AdminCareerRolesPage() {
               </select>
             </div>
 
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate-500 text-xs">
-                  <th className="pb-2 font-semibold">Career role</th>
-                  <th className="pb-2 font-semibold">Category</th>
-                  <th className="pb-2 font-semibold">Required skills</th>
-                  <th className="pb-2 font-semibold">Candidates</th>
-                  <th className="pb-2 font-semibold">Assessments</th>
-                  <th className="pb-2 font-semibold">Status</th>
-                  <th className="pb-2 font-semibold">Last updated</th>
-                  <th className="pb-2 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((r, i) => (
-                  <tr key={r.name + i} className="border-t border-slate-100">
-                    <td className="py-3 font-semibold text-slate-900">
-                      {r.name}
-                    </td>
-                    <td className="text-slate-600">{r.category}</td>
-                    <td>
-                      <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-semibold">
-                        {r.skills.length}
-                      </span>
-                    </td>
-                    <td className="text-slate-900 font-semibold">
-                      {r.candidates}
-                    </td>
-                    <td>
-                      <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-semibold">
-                        {r.assessments}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          r.status === "Active"
-                            ? "bg-green-50 text-green-700"
-                            : r.status === "Draft"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="text-slate-600">{r.updated}</td>
-                    <td className="relative">
-                      <div className="flex gap-2 text-slate-400">
-                        <button
-                          onClick={() => toggleMenu(i)}
-                          className="hover:text-slate-600"
-                        >
-                          ⋯
-                        </button>
-                        <button
-                          onClick={() => openEditRole(i)}
-                          className="text-primary hover:text-primary-dark"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() =>
-                            setDeletingRole({ index: i, name: r.name })
-                          }
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          ✕
-                        </button>
-                      </div>
+            {loading ? (
+              <p className="py-8 text-center text-sm text-slate-500">Loading career roles…</p>
+            ) : (
+              <>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500 text-xs">
+                      <th className="pb-2 font-semibold">Career role</th>
+                      <th className="pb-2 font-semibold">Category</th>
+                      <th className="pb-2 font-semibold">Required skills</th>
+                      <th className="pb-2 font-semibold">Candidates</th>
+                      <th className="pb-2 font-semibold">Assessments</th>
+                      <th className="pb-2 font-semibold">Status</th>
+                      <th className="pb-2 font-semibold">Last updated</th>
+                      <th className="pb-2 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r, i) => (
+                      <tr key={r.id} className="border-t border-slate-100">
+                        <td className="py-3 font-semibold text-slate-900">
+                          {r.name}
+                        </td>
+                        <td className="text-slate-600">{r.category || "—"}</td>
+                        <td>
+                          <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-semibold">
+                            {r.skillsRequired}
+                          </span>
+                        </td>
+                        <td className="text-slate-900 font-semibold">
+                          {r.candidates}
+                        </td>
+                        <td>
+                          <span className="px-2.5 py-1 rounded-lg bg-blue-50 text-primary text-xs font-semibold">
+                            {r.assessments}
+                          </span>
+                        </td>
+                        <td>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              r.status === "Active"
+                                ? "bg-green-50 text-green-700"
+                                : r.status === "Draft"
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {r.status}
+                          </span>
+                        </td>
+                        <td className="text-slate-600">
+                          {new Date(r.updatedAt).toLocaleDateString()}
+                        </td>
+                        <td className="relative">
+                          <div className="flex gap-2 text-slate-400">
+                            <button
+                              onClick={() => toggleMenu(i)}
+                              className="hover:text-slate-600"
+                            >
+                              ⋯
+                            </button>
+                            <button
+                              onClick={() => openEditRole(r)}
+                              className="text-primary hover:text-primary-dark"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              onClick={() =>
+                                setDeletingRole({ id: r.id, name: r.name })
+                              }
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              ✕
+                            </button>
+                          </div>
 
-                      {openMenuIndex === i && (
-                        <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
-                          <button
-                            onClick={() => viewDetails(r)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            View details
-                          </button>
-                          <button
-                            onClick={() => duplicateRole(i)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            Duplicate role
-                          </button>
-                          <button
-                            onClick={() => toggleStatus(i)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            {r.status === "Active" ? "Deactivate" : "Activate"}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {filtered.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={8}
-                      className="py-8 text-center text-sm text-slate-500"
-                    >
-                      No career roles match these filters.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <p className="text-xs text-slate-500 mt-4">
-              Showing {filtered.length} of {roles.length} roles
-            </p>
+                          {openMenuIndex === i && (
+                            <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
+                              <button
+                                onClick={() => viewDetails(r)}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                View details
+                              </button>
+                              <button
+                                onClick={() => duplicateRole(r)}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                Duplicate role
+                              </button>
+                              <button
+                                onClick={() => toggleStatus(r)}
+                                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                              >
+                                {r.status === "Active" ? "Deactivate" : "Activate"}
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {filtered.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={8}
+                          className="py-8 text-center text-sm text-slate-500"
+                        >
+                          No career roles match these filters.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                <p className="text-xs text-slate-500 mt-4">
+                  Showing {filtered.length} of {roles.length} roles
+                </p>
+              </>
+            )}
           </div>
         </main>
       </div>
@@ -685,7 +640,7 @@ export default function AdminCareerRolesPage() {
               <div>
                 <p className="text-xs text-slate-500 mb-1">Category</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingRole.category}
+                  {viewingRole.category || "—"}
                 </p>
               </div>
               <div>
@@ -717,7 +672,7 @@ export default function AdminCareerRolesPage() {
               <div>
                 <p className="text-xs text-slate-500 mb-1">Last updated</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingRole.updated}
+                  {new Date(viewingRole.updatedAt).toLocaleDateString()}
                 </p>
               </div>
             </div>
@@ -725,7 +680,7 @@ export default function AdminCareerRolesPage() {
             <div className="border-t border-slate-100 pt-4">
               <p className="text-xs text-slate-500 mb-2">Required skills</p>
               <div className="flex flex-wrap gap-2">
-                {viewingRole.skills.map((s) => (
+                {(viewingRole.skills || []).map((s) => (
                   <span
                     key={s}
                     className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium"
@@ -733,6 +688,9 @@ export default function AdminCareerRolesPage() {
                     ✓ {s}
                   </span>
                 ))}
+                {(!viewingRole.skills || viewingRole.skills.length === 0) && (
+                  <p className="text-sm text-slate-400">No skills attached yet.</p>
+                )}
               </div>
             </div>
 
@@ -811,7 +769,7 @@ export default function AdminCareerRolesPage() {
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
               <p className="text-xs text-slate-500 mt-1.5">
-                Separate each skill with a comma.
+                Separate each skill with a comma. New skill names will be created automatically.
               </p>
             </div>
             <button
@@ -827,7 +785,7 @@ export default function AdminCareerRolesPage() {
       {/* Edit career role modal */}
       {editingRole && (
         <Modal
-          title={`Edit ${editingRole.data.name}`}
+          title={`Edit ${editingRole.name}`}
           onClose={() => setEditingRole(null)}
         >
           <form onSubmit={saveEdit} className="space-y-4">
@@ -836,12 +794,9 @@ export default function AdminCareerRolesPage() {
                 Career role
               </label>
               <input
-                value={editingRole.data.name}
+                value={editingRole.name}
                 onChange={(e) =>
-                  setEditingRole((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, name: e.target.value },
-                  }))
+                  setEditingRole((prev) => ({ ...prev, name: e.target.value }))
                 }
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
@@ -851,12 +806,9 @@ export default function AdminCareerRolesPage() {
                 Category
               </label>
               <select
-                value={editingRole.data.category}
+                value={editingRole.category}
                 onChange={(e) =>
-                  setEditingRole((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, category: e.target.value },
-                  }))
+                  setEditingRole((prev) => ({ ...prev, category: e.target.value }))
                 }
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               >
@@ -870,12 +822,9 @@ export default function AdminCareerRolesPage() {
                 Status
               </label>
               <select
-                value={editingRole.data.status}
+                value={editingRole.status}
                 onChange={(e) =>
-                  setEditingRole((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, status: e.target.value },
-                  }))
+                  setEditingRole((prev) => ({ ...prev, status: e.target.value }))
                 }
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               >
@@ -889,18 +838,18 @@ export default function AdminCareerRolesPage() {
                 Required skills
               </label>
               <input
-                value={editingRole.data.skillsText}
+                value={editingRole.skillsText}
                 onChange={(e) =>
                   setEditingRole((prev) => ({
                     ...prev,
-                    data: { ...prev.data, skillsText: e.target.value },
+                    skillsText: e.target.value,
                   }))
                 }
                 placeholder="Comma-separated, e.g. React, JavaScript, CSS"
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
               <p className="text-xs text-slate-500 mt-1.5">
-                Separate each skill with a comma.
+                Separate each skill with a comma. This replaces the full list of required skills.
               </p>
             </div>
             <button
