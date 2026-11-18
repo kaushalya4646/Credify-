@@ -69,7 +69,9 @@ model CareerRole {
   name        String   @unique
   description String?
   category    String?
+  status      String   @default("Active")
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
   skills     CareerRoleSkill[]
   candidates CandidateProfile[]
 }
