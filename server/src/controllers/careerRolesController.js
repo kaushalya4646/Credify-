@@ -1,17 +1,70 @@
 const prisma = require("../lib/prisma");
 
+async function attachSkillsByName(careerRoleId, skillNames) {
+  for (const rawName of skillNames) {
+    const name = rawName.trim();
+    if (!name) continue;
+
+    const skill = await prisma.skill.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+
+    await prisma.careerRoleSkill.upsert({
+      where: { careerRoleId_skillId: { careerRoleId, skillId: skill.id } },
+      update: { requiredLevel: "Intermediate" },
+      create: { careerRoleId, skillId: skill.id, requiredLevel: "Intermediate" },
+    });
+  }
+}
+
 async function getCareerRoles(req, res) {
   try {
     const roles = await prisma.careerRole.findMany({
-      include: { skills: true },
+      include: {
+        skills: { include: { skill: true } },
+        candidates: true,
+      },
+      orderBy: { updatedAt: "desc" },
     });
-    const result = roles.map((r) => ({
-      id: r.id,
-      name: r.name,
-      description: r.description,
-      category: r.category,
-      skillsRequired: r.skills.length,
-    }));
+
+    const visibleRoles =
+      req.user.role === "ADMIN" ? roles : roles.filter((r) => r.status === "Active");
+
+    const allSkillIds = [
+      ...new Set(visibleRoles.flatMap((r) => r.skills.map((cs) => cs.skillId))),
+    ];
+
+    const assessmentCounts = await prisma.assessment.groupBy({
+      by: ["skillId"],
+      _count: { id: true },
+      where: { skillId: { in: allSkillIds } },
+    });
+    const countBySkillId = Object.fromEntries(
+      assessmentCounts.map((a) => [a.skillId, a._count.id])
+    );
+
+    const result = visibleRoles.map((r) => {
+      const roleSkillIds = r.skills.map((cs) => cs.skillId);
+      const assessmentsCount = roleSkillIds.reduce(
+        (sum, sid) => sum + (countBySkillId[sid] || 0),
+        0
+      );
+      return {
+        id: r.id,
+        name: r.name,
+        description: r.description,
+        category: r.category,
+        status: r.status,
+        skillsRequired: r.skills.length,
+        skills: r.skills.map((cs) => cs.skill.name),
+        candidates: r.candidates.length,
+        assessments: assessmentsCount,
+        updatedAt: r.updatedAt,
+      };
+    });
+
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -34,6 +87,7 @@ async function getCareerRoleById(req, res) {
       name: role.name,
       description: role.description,
       category: role.category,
+      status: role.status,
       requiredSkills: role.skills.map((cs) => ({
         skillId: cs.skillId,
         name: cs.skill.name,
@@ -96,7 +150,7 @@ async function getMySelectedCareerRole(req, res) {
 
 async function createCareerRole(req, res) {
   try {
-    const { name, description } = req.body;
+    const { name, description, category, status, skillNames } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: "Career role name is required." });
@@ -108,8 +162,12 @@ async function createCareerRole(req, res) {
     }
 
     const careerRole = await prisma.careerRole.create({
-      data: { name, description },
+      data: { name, description, category, status: status || "Active" },
     });
+
+    if (Array.isArray(skillNames) && skillNames.length > 0) {
+      await attachSkillsByName(careerRole.id, skillNames);
+    }
 
     res.status(201).json(careerRole);
   } catch (err) {
@@ -121,12 +179,23 @@ async function createCareerRole(req, res) {
 async function updateCareerRole(req, res) {
   try {
     const { id } = req.params;
-    const { name, description } = req.body;
+    const { name, description, category, status, skillNames } = req.body;
+
+    const data = {};
+    if (name !== undefined) data.name = name;
+    if (description !== undefined) data.description = description;
+    if (category !== undefined) data.category = category;
+    if (status !== undefined) data.status = status;
 
     const careerRole = await prisma.careerRole.update({
       where: { id },
-      data: { name, description },
+      data,
     });
+
+    if (Array.isArray(skillNames)) {
+      await prisma.careerRoleSkill.deleteMany({ where: { careerRoleId: id } });
+      await attachSkillsByName(id, skillNames);
+    }
 
     res.json(careerRole);
   } catch (err) {
@@ -138,10 +207,19 @@ async function updateCareerRole(req, res) {
 async function deleteCareerRole(req, res) {
   try {
     const { id } = req.params;
+
+    await prisma.careerRoleSkill.deleteMany({ where: { careerRoleId: id } });
     await prisma.careerRole.delete({ where: { id } });
+
     res.status(204).send();
   } catch (err) {
     console.error(err);
+    if (err.code === "P2003") {
+      return res.status(409).json({
+        error:
+          "Cannot delete this role because one or more candidates have selected it as their target career role.",
+      });
+    }
     res.status(500).json({ error: "Could not delete career role." });
   }
 }
@@ -166,4 +244,13 @@ async function addSkillToCareerRole(req, res) {
   }
 }
 
-module.exports = { getCareerRoles, createCareerRole, updateCareerRole, deleteCareerRole, addSkillToCareerRole, getCareerRoleById, selectCareerRole, getMySelectedCareerRole };
+module.exports = {
+  getCareerRoles,
+  createCareerRole,
+  updateCareerRole,
+  deleteCareerRole,
+  addSkillToCareerRole,
+  getCareerRoleById,
+  selectCareerRole,
+  getMySelectedCareerRole,
+};
