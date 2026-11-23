@@ -43,6 +43,26 @@ model CandidateProfile {
   createdAt  DateTime @default(now())
   targetCareerRoleId String?
   targetCareerRole   CareerRole? @relation(fields: [targetCareerRoleId], references: [id])
+  experienceYears    Int?
+  careerInterests    String?
+  technicalSkills    String? // comma-separated plain text, self-reported, NOT verified
+  projects           Project[]
+  certifications     Certification[]
+}
+
+model Project {
+  id                 String           @id @default(uuid())
+  name               String
+  link               String?
+  candidateProfileId String
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id])
+}
+
+model Certification {
+  id                 String           @id @default(uuid())
+  name               String
+  candidateProfileId String
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id])
 }
 
 model RecruiterProfile {
