@@ -409,7 +409,7 @@ export default function CandidateDashboardPage() {
             <div className="rounded-xl border border-gray-200 bg-white p-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-semibold text-gray-900">Recent Results</h3>
-                <Link to="/candidate/assessments/results" className="text-sm font-semibold text-primary hover:underline">
+                <Link to="/candidate/assessments" className="text-sm font-semibold text-primary hover:underline">
                   View all results ›
                 </Link>
               </div>

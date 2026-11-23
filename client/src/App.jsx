@@ -72,7 +72,7 @@ export default function App() {
       <Route path="/candidate/profile" element={<ProtectedRoute role="CANDIDATE"><CandidateProfilePage /></ProtectedRoute>} />
       <Route path="/candidate/career-role" element={<ProtectedRoute role="CANDIDATE"><CareerRolePage /></ProtectedRoute>} />
       <Route path="/candidate/assessments" element={<ProtectedRoute role="CANDIDATE"><AssessmentsPage /></ProtectedRoute>} />
-      <Route path="/candidate/assessments/results" element={<ProtectedRoute role="CANDIDATE"><AssessmentResultPage /></ProtectedRoute>} />
+      <Route path="/candidate/assessments/results/:attemptId" element={<ProtectedRoute role="CANDIDATE"><AssessmentResultPage /></ProtectedRoute>} />
       <Route path="/candidate/skill-gaps" element={<ProtectedRoute role="CANDIDATE"><SkillGapsPage /></ProtectedRoute>} />
       <Route path="/candidate/assessments/:id/screen" element={<ProtectedRoute role="CANDIDATE"><AssessmentScreenPage /></ProtectedRoute>} />
 

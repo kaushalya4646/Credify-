@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", to: "/candidate/dashboard" },
@@ -11,51 +12,11 @@ const navItems = [
 
 const assessmentSubnav = [
   { label: "Technical assessments", to: "/candidate/assessments" },
-  { label: "Assessment results", to: "/candidate/assessments/results" },
-];
-
-// TODO (backend step): replace every value below with this attempt's real result from the API.
-const assessmentName = "Java programming";
-const overallScore = 82;
-const correct = 16;
-const incorrect = 4;
-const total = 20;
-
-const strengths = [
+  // No results index page: link to the list, but highlight on any result page.
   {
-    title: "Java fundamentals",
-    desc: "Excellent understanding of core language concepts",
-    glyph: "☕",
-  },
-  {
-    title: "Object-oriented programming",
-    desc: "Strong grasp of classes, inheritance and interfaces",
-    glyph: "▣",
-  },
-  {
-    title: "Java syntax",
-    desc: "Writes clean, correct code with few errors",
-    glyph: "{ }",
-  },
-];
-
-const skillBreakdown = [
-  { name: "Object-oriented programming", pct: 91 },
-  { name: "Algorithms", pct: 27 },
-  { name: "Data structures", pct: 48 },
-  { name: "Java syntax", pct: 92 },
-];
-
-const areasForImprovement = [
-  {
-    title: "Advanced concurrency",
-    desc: "Improve thread synchronization, executors and deadlock avoidance.",
-    glyph: "⑂",
-  },
-  {
-    title: "Java collections",
-    desc: "Deepen your understanding of HashMap, TreeMap and concurrent collections.",
-    glyph: "🗄",
+    label: "Assessment results",
+    to: "/candidate/assessments",
+    activePrefix: "/candidate/assessments/results/",
   },
 ];
 
@@ -71,13 +32,7 @@ const notifications = [
   },
 ];
 
-function barColor(pct) {
-  if (pct >= 70) return "#16A34A";
-  if (pct >= 40) return "#D97706";
-  return "#DC2626";
-}
-
-function ScoreRing({ pct }) {
+function ScoreRing({ pct, correct, total }) {
   const r = 46;
   const c = 2 * Math.PI * r;
   return (
@@ -104,9 +59,11 @@ function ScoreRing({ pct }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-xl font-bold text-gray-900">{pct}%</span>
-        <span className="text-[11px] text-gray-500">
-          {correct} of {total} correct
-        </span>
+        {correct != null && total != null && (
+          <span className="text-[11px] text-gray-500">
+            {correct} of {total} correct
+          </span>
+        )}
       </div>
     </div>
   );
@@ -114,8 +71,45 @@ function ScoreRing({ pct }) {
 
 export default function AssessmentResultPage() {
   const { pathname } = useLocation();
-  const [showAllStrengths, setShowAllStrengths] = useState(false);
-  const visibleStrengths = showAllStrengths ? strengths : strengths.slice(0, 3);
+  const { attemptId } = useParams();
+  const [attempt, setAttempt] = useState(null);
+  const [isVerified, setIsVerified] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const [attemptData, verifications] = await Promise.all([
+          api.get(`/api/assessments/attempts/${attemptId}`),
+          api.get("/api/skill-verifications/me"),
+        ]);
+        setAttempt(attemptData);
+        const skillId = attemptData.assessment?.skill?.id;
+        setIsVerified(
+          (verifications || []).some(
+            (v) => v.skillId === skillId && v.status === "Verified",
+          ),
+        );
+      } catch (err) {
+        console.error("Failed to load assessment result:", err);
+        setError(err.message || "Could not load this result.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [attemptId]);
+
+  const assessmentTitle = attempt?.assessment?.title;
+  const skillName = attempt?.assessment?.skill?.name;
+  const score = attempt?.score ?? 0;
+  const correct = attempt?.correctCount;
+  const total = attempt?.totalQuestions;
+  const hasCounts = correct != null && total != null;
+  const incorrect = hasCounts ? total - correct : null;
 
   // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -186,7 +180,9 @@ export default function AssessmentResultPage() {
           </div>
           <div className="ml-3 space-y-1 border-l border-gray-200 pl-3">
             {assessmentSubnav.map((item) => {
-              const active = pathname === item.to;
+              const active = item.activePrefix
+                ? pathname.startsWith(item.activePrefix)
+                : pathname === item.to;
               return (
                 <Link
                   key={item.label}
@@ -230,7 +226,12 @@ export default function AssessmentResultPage() {
             <h1 className="text-xl font-semibold text-gray-900">
               Assessment result
             </h1>
-            <p className="text-sm text-gray-500">{assessmentName}</p>
+            {attempt && (
+              <p className="text-sm text-gray-500">
+                {assessmentTitle}
+                {skillName && <> &middot; {skillName}</>}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-4" ref={menuRef}>
             {/* Help dropdown */}
@@ -397,8 +398,18 @@ export default function AssessmentResultPage() {
         </header>
 
         <main className="flex-1 space-y-6 px-6 py-8 lg:px-10">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="flex flex-col gap-6">
+          {loading && (
+            <p className="py-10 text-center text-sm text-gray-500">
+              Loading result…
+            </p>
+          )}
+
+          {!loading && error && (
+            <p className="py-10 text-center text-sm text-red-600">{error}</p>
+          )}
+
+          {!loading && !error && attempt && (
+            <div className="grid gap-6 lg:grid-cols-2">
               <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-6">
                 <div className="flex items-center gap-4">
                   <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-2xl text-primary">
@@ -406,14 +417,20 @@ export default function AssessmentResultPage() {
                   </span>
                   <div>
                     <p className="text-3xl font-bold text-gray-900">
-                      {overallScore}%
+                      {score}%
                     </p>
                     <p className="text-sm text-gray-500">Overall score</p>
                   </div>
                 </div>
-                <span className="rounded-full bg-[#E8F5EE] px-3 py-1 text-sm font-semibold text-[#15803D]">
-                  Verified
-                </span>
+                {isVerified ? (
+                  <span className="rounded-full bg-[#E8F5EE] px-3 py-1 text-sm font-semibold text-[#15803D]">
+                    Verified
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                    Not Verified
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-6">
@@ -422,119 +439,28 @@ export default function AssessmentResultPage() {
                     <span className="h-3 w-3 rounded-sm bg-green-500" />
                     <span className="text-gray-600">Correct</span>
                     <span className="ml-6 font-semibold text-gray-900">
-                      {correct}
+                      {hasCounts ? correct : "—"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-sm bg-red-500" />
                     <span className="text-gray-600">Incorrect</span>
                     <span className="ml-6 font-semibold text-gray-900">
-                      {incorrect}
+                      {hasCounts ? incorrect : "—"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-sm bg-gray-200" />
                     <span className="text-gray-600">Total</span>
                     <span className="ml-6 font-semibold text-gray-900">
-                      {total}
+                      {hasCounts ? total : "—"}
                     </span>
                   </div>
                 </div>
-                <ScoreRing pct={overallScore} />
+                <ScoreRing pct={score} correct={correct} total={total} />
               </div>
             </div>
-
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <h3 className="text-base font-semibold text-gray-900">
-                Strengths
-              </h3>
-              <ul className="mt-4 space-y-4">
-                {visibleStrengths.map((s) => (
-                  <li key={s.title} className="flex gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#DCFCE7] text-base text-[#15803D]">
-                      {s.glyph}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        {s.title}
-                      </p>
-                      <p className="text-xs text-gray-500">{s.desc}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              {strengths.length > 3 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllStrengths(!showAllStrengths)}
-                  className="mt-4 flex items-center gap-1 text-sm font-semibold text-primary hover:underline"
-                >
-                  <span>{showAllStrengths ? "⌃" : "⌄"}</span>
-                  {showAllStrengths ? "Show less" : "Show more"}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <h3 className="text-base font-semibold text-gray-900">
-                Skill breakdown
-              </h3>
-              <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
-                {skillBreakdown.map((s) => (
-                  <div key={s.name} className="flex gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-base text-primary">
-                      ▣
-                    </span>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-gray-900">
-                          {s.name}
-                        </span>
-                        <span
-                          className="font-semibold"
-                          style={{ color: barColor(s.pct) }}
-                        >
-                          {s.pct}%
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-1.5 rounded-full bg-gray-200">
-                        <div
-                          className="h-1.5 rounded-full"
-                          style={{
-                            width: `${s.pct}%`,
-                            backgroundColor: barColor(s.pct),
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <h3 className="text-base font-semibold text-gray-900">
-                Areas for improvement
-              </h3>
-              <ul className="mt-4 space-y-4">
-                {areasForImprovement.map((a) => (
-                  <li key={a.title} className="flex gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-50 text-base text-red-500">
-                      {a.glyph}
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        {a.title}
-                      </p>
-                      <p className="text-xs text-gray-500">{a.desc}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Link

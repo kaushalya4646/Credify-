@@ -130,7 +130,7 @@ function CandidateSidebar({ activeId }) {
   const location = useLocation()
   const subNav = [
     { label: 'Technical assessments', path: '/candidate/assessments' },
-    { label: 'Assessment results', path: '/candidate/assessments/results' },
+    { label: 'Assessment results', path: '/candidate/assessments' },
     { label: 'Assessment screen', path: `/candidate/assessments/${activeId}/screen` },
   ]
 
@@ -165,7 +165,7 @@ function CandidateSidebar({ activeId }) {
                 <div className="ml-6 mt-1 space-y-1">
                   {subNav.map((sub) => (
                     <Link
-                      key={sub.path}
+                      key={sub.label}
                       to={sub.path}
                       className={`block px-3 py-1.5 text-xs font-medium rounded-lg ${
                         location.pathname === sub.path ? 'text-primary font-semibold' : 'text-slate-500 hover:text-slate-700'

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", to: "/candidate/dashboard" },
@@ -11,70 +12,69 @@ const navItems = [
 
 const assessmentSubnav = [
   { label: "Technical assessments", to: "/candidate/assessments" },
-  { label: "Assessment results", to: "/candidate/assessments/results" },
+  // No results index page: link to the list, but highlight on any result page.
+  {
+    label: "Assessment results",
+    to: "/candidate/assessments",
+    activePrefix: "/candidate/assessments/results/",
+  },
 ];
 
 const tabs = ["All", "Recommended", "Completed", "Not started"];
 
-// TODO (backend step): replace with the candidate's real assessments from the API.
-const assessments = [
-  {
-    id: "java-programming",
-    name: "Java programming",
-    desc: "Test core Java, OOP and collections.",
-    status: "Not started",
-    tags: ["Intermediate", "30 mins", "20 questions"],
-    icon: { bg: "#EFF6FF", fg: "#2563EB", glyph: "☕" },
-    action: "Start assessment",
-  },
-  {
-    id: "sql-database-fundamentals",
-    name: "SQL & database fundamentals",
-    desc: "Test queries, joins and database design.",
-    status: "Completed",
-    tags: ["Intermediate", "25 mins", "15 questions"],
-    icon: { bg: "#DCFCE7", fg: "#15803D", glyph: "🗄" },
-    action: "View results",
-    result: { score: 86, correct: 13, total: 15, time: "21 mins" },
-  },
-  {
-    id: "rest-api-development",
-    name: "REST API development",
-    desc: "Test API design, HTTP methods and status codes.",
-    status: "Recommended",
-    tags: ["Intermediate", "40 mins", "20 questions"],
-    icon: { bg: "#DCFCE7", fg: "#15803D", glyph: "☁" },
-    action: "Start assessment",
-  },
-  {
-    id: "python-fundamentals",
-    name: "Python fundamentals",
-    desc: "Test syntax, data structures and basic scripting.",
-    status: "Not started",
-    tags: ["Beginner", "25 mins", "18 questions"],
-    icon: { bg: "#FEF3C7", fg: "#B45309", glyph: "🐍" },
-    action: "Start assessment",
-  },
-  {
-    id: "react-fundamentals",
-    name: "React fundamentals",
-    desc: "Test components, hooks and state management.",
-    status: "Recommended",
-    tags: ["Intermediate", "35 mins", "20 questions"],
-    icon: { bg: "#EFF6FF", fg: "#2563EB", glyph: "⚛" },
-    action: "Start assessment",
-  },
-  {
-    id: "git-version-control",
-    name: "Git & version control",
-    desc: "Test branching, merging and collaboration workflows.",
-    status: "Completed",
-    tags: ["Beginner", "20 mins", "12 questions"],
-    icon: { bg: "#DCFCE7", fg: "#15803D", glyph: "🔧" },
-    action: "View results",
-    result: { score: 92, correct: 11, total: 12, time: "14 mins" },
-  },
+// Decorative only — there's no icon data in the backend, so cards cycle
+// through these by their position in the list.
+const iconPalette = [
+  { bg: "#EFF6FF", fg: "#2563EB", glyph: "☕" },
+  { bg: "#DCFCE7", fg: "#15803D", glyph: "🗄" },
+  { bg: "#DCFCE7", fg: "#15803D", glyph: "☁" },
+  { bg: "#FEF3C7", fg: "#B45309", glyph: "🐍" },
+  { bg: "#EFF6FF", fg: "#2563EB", glyph: "⚛" },
+  { bg: "#DCFCE7", fg: "#15803D", glyph: "🔧" },
 ];
+
+// Turn raw API data into the card shape the UI renders.
+function buildCards(assessments, attempts, selectedRole) {
+  const requiredSkillIds = new Set(
+    (selectedRole?.requiredSkills || []).map((s) => s.skillId),
+  );
+
+  return assessments.map((a, i) => {
+    // attempts/me is ordered newest first, so this is the latest completed attempt.
+    const attempt = attempts.find(
+      (t) => t.assessmentId === a.id && t.status === "Completed",
+    );
+
+    let status = "Not started";
+    if (attempt) status = "Completed";
+    else if (requiredSkillIds.has(a.skillId)) status = "Recommended";
+
+    const questionCount = a._count?.questions ?? 0;
+    const tags = [
+      a.difficulty,
+      a.durationMinutes != null ? `${a.durationMinutes} mins` : null,
+      `${questionCount} ${questionCount === 1 ? "question" : "questions"}`,
+    ].filter(Boolean);
+
+    return {
+      id: a.id,
+      name: a.title,
+      desc: a.description || "No description provided.",
+      status,
+      tags,
+      icon: iconPalette[i % iconPalette.length],
+      action: attempt ? "View results" : "Start assessment",
+      result: attempt
+        ? {
+            score: attempt.score,
+            correct: attempt.correctCount,
+            total: attempt.totalQuestions,
+            attemptId: attempt.id,
+          }
+        : null,
+    };
+  });
+}
 
 const statusStyles = {
   "Not started": "bg-amber-50 text-amber-700",
@@ -99,6 +99,30 @@ export default function AssessmentsPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("All");
   const [activeResult, setActiveResult] = useState(null);
+  const [assessments, setAssessments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [assessmentsData, attemptsData, selectedRole] = await Promise.all([
+          api.get("/api/assessments"),
+          api.get("/api/assessments/attempts/me"),
+          api.get("/api/career-roles/me/selected"),
+        ]);
+        setAssessments(
+          buildCards(assessmentsData || [], attemptsData || [], selectedRole),
+        );
+      } catch (err) {
+        console.error("Failed to load assessments:", err);
+        setError(err.message || "Could not load assessments.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
 
   // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -172,7 +196,9 @@ export default function AssessmentsPage() {
           </div>
           <div className="ml-3 space-y-1 border-l border-gray-200 pl-3">
             {assessmentSubnav.map((item) => {
-              const active = pathname === item.to;
+              const active = item.activePrefix
+                ? pathname.startsWith(item.activePrefix)
+                : pathname === item.to;
               return (
                 <Link
                   key={item.label}
@@ -460,7 +486,17 @@ export default function AssessmentsPage() {
                 </button>
               </div>
             ))}
-            {visible.length === 0 && (
+            {loading && (
+              <p className="col-span-2 py-10 text-center text-sm text-gray-500">
+                Loading assessments…
+              </p>
+            )}
+            {!loading && error && (
+              <p className="col-span-2 py-10 text-center text-sm text-red-600">
+                {error}
+              </p>
+            )}
+            {!loading && !error && visible.length === 0 && (
               <p className="col-span-2 py-10 text-center text-sm text-gray-500">
                 No assessments in &ldquo;{tab}&rdquo; right now.
               </p>
@@ -500,23 +536,18 @@ export default function AssessmentsPage() {
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-4 text-center text-sm">
-              <div>
-                <p className="font-semibold text-gray-900">
-                  {activeResult.result.correct}/{activeResult.result.total}
-                </p>
-                <p className="text-xs text-gray-500">Correct answers</p>
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">
-                  {activeResult.result.time}
-                </p>
-                <p className="text-xs text-gray-500">Time taken</p>
-              </div>
+            <div className="mt-6 text-center text-sm">
+              <p className="font-semibold text-gray-900">
+                {activeResult.result.correct != null &&
+                activeResult.result.total != null
+                  ? `${activeResult.result.correct}/${activeResult.result.total}`
+                  : "—"}
+              </p>
+              <p className="text-xs text-gray-500">Correct answers</p>
             </div>
 
             <Link
-              to="/candidate/assessments/results"
+              to={`/candidate/assessments/results/${activeResult.result.attemptId}`}
               className="mt-6 block min-h-11 w-full rounded-lg bg-primary text-center text-sm font-semibold leading-[44px] text-white hover:bg-primary-dark"
             >
               View full breakdown
