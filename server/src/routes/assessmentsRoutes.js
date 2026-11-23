@@ -6,6 +6,7 @@ const {
   addQuestion,
   submitAttempt,
   getMyAttempts,
+  getAttemptById,
 } = require("../controllers/assessmentsController");
 const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
@@ -13,6 +14,8 @@ const router = express.Router();
 
 router.get("/", requireAuth, getAssessments);
 router.get("/attempts/me", requireAuth, getMyAttempts);
+// Must come after /attempts/me so "me" isn't captured as an attemptId.
+router.get("/attempts/:attemptId", requireAuth, getAttemptById);
 router.get("/:id", requireAuth, getAssessmentById);
 router.post("/", requireAuth, requireRole("ADMIN"), createAssessment);
 router.post("/:id/questions", requireAuth, requireRole("ADMIN"), addQuestion);
