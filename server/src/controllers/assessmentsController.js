@@ -82,7 +82,8 @@ async function getAssessmentById(req, res) {
             questionText: true,
             type: true,
             options: true,
-            // correctAnswer intentionally left out so candidates can't see it
+            // Only admins (the question editor) get the answer key.
+            correctAnswer: req.user.role === "ADMIN",
           },
         },
       },
@@ -101,8 +102,16 @@ async function getAssessmentById(req, res) {
 
 async function createAssessment(req, res) {
   try {
-    const { skillId, title, difficulty, type, passingScore, status } =
-      req.body;
+    const {
+      skillId,
+      title,
+      description,
+      difficulty,
+      type,
+      durationMinutes,
+      passingScore,
+      status,
+    } = req.body;
 
     if (!skillId || !title || !difficulty || !type) {
       return res
@@ -110,7 +119,7 @@ async function createAssessment(req, res) {
         .json({ error: "skillId, title, difficulty, and type are required." });
     }
 
-    const numberError = validateNumbers({ passingScore });
+    const numberError = validateNumbers({ passingScore, durationMinutes });
     if (numberError) {
       return res.status(400).json({ error: numberError });
     }
@@ -125,8 +134,10 @@ async function createAssessment(req, res) {
       data: {
         skillId,
         title,
+        description: description ?? null,
         difficulty,
         type,
+        durationMinutes: durationMinutes ?? null,
         passingScore: passingScore ?? 70,
         status: status ?? "Draft",
       },

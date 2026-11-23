@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/admin/dashboard" },
@@ -101,53 +102,62 @@ function Modal({ title, onClose, children }) {
 
 const QUESTION_TYPES = ["MCQ", "Short answer", "Long answer"];
 
-function emptyQuestion() {
-  return {
-    id: Date.now() + Math.random(),
-    type: "MCQ",
-    prompt: "",
-    options: ["", "", "", ""],
-    correctIndex: 0,
-  };
+// Editing shape for the modal: MCQ answers are picked by position in the form
+// but stored by text, which is what the backend expects.
+function emptyQuestionForm() {
+  return { id: null, type: "MCQ", questionText: "", options: ["", "", "", ""], correctIndex: 0 };
 }
 
-// TODO (backend step): replace with the real assessment + question bank from the API.
-const initialAssessment = {
-  title: "Java Programming",
-  description: "Add, edit and order the question bank for this assessment.",
-};
+function formFromQuestion(q) {
+  const options = Array.isArray(q.options) && q.options.length ? [...q.options] : ["", "", "", ""];
+  const correctIndex = Math.max(0, options.indexOf(q.correctAnswer));
+  return { id: q.id, type: q.type, questionText: q.questionText, options, correctIndex };
+}
 
-const initialQuestions = [
-  {
-    id: 1,
-    type: "MCQ",
-    prompt:
-      "Which concept allows a class to acquire properties and methods from another class?",
-    options: ["Encapsulation", "Inheritance", "Polymorphism", "Abstraction"],
-    correctIndex: 1,
-  },
-  {
-    id: 2,
-    type: "MCQ",
-    prompt: "What keyword is used to inherit a class in Java?",
-    options: ["implements", "extends", "inherits", "super"],
-    correctIndex: 1,
-  },
-];
+// Builds the API body and checks it the same way the backend does.
+function questionBody(form) {
+  const questionText = form.questionText.trim();
+  if (!questionText) return { error: "Write the question first." };
+  if (form.type !== "MCQ") {
+    return { body: { questionText, type: form.type, options: null, correctAnswer: null } };
+  }
+  const correct = form.options[form.correctIndex]?.trim();
+  if (!correct) return { error: "The option marked as correct can't be empty." };
+  const options = form.options.map((o) => o.trim()).filter(Boolean);
+  if (options.length < 2) return { error: "Add at least two answer options." };
+  if (new Set(options).size !== options.length) {
+    return { error: "Each answer option must be different." };
+  }
+  return { body: { questionText, type: "MCQ", options, correctAnswer: correct } };
+}
+
+function ErrorText({ children }) {
+  if (!children) return null;
+  return (
+    <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+      {children}
+    </p>
+  );
+}
 
 export default function AdminAssessmentEditorPage() {
-  const [assessment, setAssessment] = useState(initialAssessment);
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(initialAssessment);
+  const { id } = useParams();
+  const [assessment, setAssessment] = useState({ title: "Assessment", description: "" });
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  const [questions, setQuestions] = useState(initialQuestions);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState({ title: "", description: "" });
+  const [questions, setQuestions] = useState([]);
   const [editingQuestion, setEditingQuestion] = useState(null); // { index, data } | null
   const [deletingQuestionId, setDeletingQuestionId] = useState(null);
-
-  const [passingScore, setPassingScore] = useState(50);
-  const [draftSavedAt, setDraftSavedAt] = useState(null);
+  const [passingScore, setPassingScore] = useState("");
+  const [savedPassingScore, setSavedPassingScore] = useState(null);
   const [confirmingPublish, setConfirmingPublish] = useState(false);
-  const [publishedMessage, setPublishedMessage] = useState("");
+
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState("");
+  const [banner, setBanner] = useState(null); // { kind: "success" | "error", text }
 
   // header dropdown state: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -167,34 +177,81 @@ export default function AdminAssessmentEditorPage() {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setLoadError("");
+      try {
+        const data = await api.get(`/api/assessments/${id}`);
+        setAssessment(data);
+        setQuestions(data.questions || []);
+        setPassingScore(String(data.passingScore));
+        setSavedPassingScore(data.passingScore);
+      } catch (err) {
+        console.error("Failed to load assessment:", err);
+        setLoadError(err.message || "Could not load this assessment.");
+        setAssessment({ title: "Assessment not found", description: "" });
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [id]);
+
+  function showBanner(kind, text) {
+    setBanner({ kind, text });
+    if (kind === "success") setTimeout(() => setBanner(null), 4000);
+  }
+
+  // Saves only the fields given; keeps local state in step with the server.
+  async function saveAssessment(fields) {
+    const updated = await api.put(`/api/assessments/${id}`, fields);
+    setAssessment((prev) => ({ ...prev, ...updated }));
+    if (updated.passingScore != null) {
+      setSavedPassingScore(updated.passingScore);
+      setPassingScore(String(updated.passingScore));
+    }
+    return updated;
+  }
+
   // ---- Assessment title/description ----
   function openTitleEdit() {
-    setTitleDraft(assessment);
+    setModalError("");
+    setTitleDraft({ title: assessment.title, description: assessment.description ?? "" });
     setEditingTitle(true);
   }
 
-  function saveTitle(e) {
+  async function saveTitle(e) {
     e.preventDefault();
-    setAssessment(titleDraft);
-    setEditingTitle(false);
+    if (!titleDraft.title.trim()) return setModalError("Enter a title.");
+    setSaving(true);
+    setModalError("");
+    try {
+      await saveAssessment({
+        title: titleDraft.title.trim(),
+        description: titleDraft.description.trim() || null,
+      });
+      setEditingTitle(false);
+    } catch (err) {
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ---- Questions ----
   function addQuestion() {
-    const q = emptyQuestion();
-    setQuestions((prev) => [...prev, q]);
-    setEditingQuestion({ index: questions.length, data: q });
+    setModalError("");
+    setEditingQuestion({ index: questions.length, data: emptyQuestionForm() });
   }
 
   function openEditQuestion(index) {
-    setEditingQuestion({ index, data: { ...questions[index] } });
+    setModalError("");
+    setEditingQuestion({ index, data: formFromQuestion(questions[index]) });
   }
 
   function updateEditingField(field, value) {
-    setEditingQuestion((prev) => ({
-      ...prev,
-      data: { ...prev.data, [field]: value },
-    }));
+    setEditingQuestion((prev) => ({ ...prev, data: { ...prev.data, [field]: value } }));
   }
 
   function updateEditingOption(i, value) {
@@ -216,37 +273,121 @@ export default function AdminAssessmentEditorPage() {
     setEditingQuestion((prev) => {
       const options = prev.data.options.filter((_, idx) => idx !== i);
       let correctIndex = prev.data.correctIndex;
-      if (correctIndex >= options.length) correctIndex = 0;
+      if (i < correctIndex) correctIndex -= 1;
+      else if (i === correctIndex || correctIndex >= options.length) correctIndex = 0;
       return { ...prev, data: { ...prev.data, options, correctIndex } };
     });
   }
 
-  function saveQuestion(e) {
+  async function saveQuestion(e) {
     e.preventDefault();
-    setQuestions((prev) =>
-      prev.map((q, i) =>
-        i === editingQuestion.index ? editingQuestion.data : q,
-      ),
-    );
-    setEditingQuestion(null);
+    const { body, error } = questionBody(editingQuestion.data);
+    if (error) return setModalError(error);
+    setSaving(true);
+    setModalError("");
+    try {
+      const qid = editingQuestion.data.id;
+      if (qid) {
+        const updated = await api.put(`/api/assessments/${id}/questions/${qid}`, body);
+        // Replace in place so the list order doesn't jump around.
+        setQuestions((prev) => prev.map((q) => (q.id === qid ? updated : q)));
+      } else {
+        const created = await api.post(`/api/assessments/${id}/questions`, body);
+        setQuestions((prev) => [...prev, created]);
+      }
+      setEditingQuestion(null);
+    } catch (err) {
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function confirmDeleteQuestion() {
-    setQuestions((prev) => prev.filter((q) => q.id !== deletingQuestionId));
-    setDeletingQuestionId(null);
+  async function confirmDeleteQuestion() {
+    setSaving(true);
+    setModalError("");
+    try {
+      await api.delete(`/api/assessments/${id}/questions/${deletingQuestionId}`);
+      setQuestions((prev) => prev.filter((q) => q.id !== deletingQuestionId));
+      setDeletingQuestionId(null);
+    } catch (err) {
+      // Shows the backend's 409 messages (last question of an Active
+      // assessment, or a question candidates have already answered).
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  // ---- Save draft / publish ----
-  function saveDraft() {
-    // TODO (backend step): PATCH the assessment + questions to the API as a draft.
-    setDraftSavedAt(new Date().toLocaleTimeString());
+  // ---- Passing score / save draft / publish ----
+  function parsedPassingScore() {
+    const n = Number(passingScore);
+    return passingScore !== "" && Number.isInteger(n) && n >= 0 && n <= 100 ? n : null;
   }
 
-  function publishAssessment() {
-    // TODO (backend step): POST to publish the assessment for candidates.
-    setConfirmingPublish(false);
-    setPublishedMessage("Assessment published. It is now live for candidates.");
-    setTimeout(() => setPublishedMessage(""), 4000);
+  async function savePassingScore() {
+    const n = parsedPassingScore();
+    if (n == null) {
+      showBanner("error", "Passing score must be a whole number from 0 to 100.");
+      return;
+    }
+    if (n === savedPassingScore) return;
+    try {
+      await saveAssessment({ passingScore: n });
+      showBanner("success", `Passing score saved (${n}%).`);
+    } catch (err) {
+      showBanner("error", err.message);
+    }
+  }
+
+  async function saveDraft() {
+    const n = parsedPassingScore();
+    if (n == null) {
+      showBanner("error", "Passing score must be a whole number from 0 to 100.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveAssessment({ status: "Draft", passingScore: n });
+      showBanner("success", `Saved as draft at ${new Date().toLocaleTimeString()}. Candidates can't see it.`);
+    } catch (err) {
+      showBanner("error", err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const mcqCount = questions.filter((q) => q.type === "MCQ").length;
+
+  function requestPublish() {
+    if (parsedPassingScore() == null) {
+      showBanner("error", "Passing score must be a whole number from 0 to 100.");
+      return;
+    }
+    if (questions.length === 0) {
+      showBanner("error", "Add at least one question before publishing.");
+      return;
+    }
+    // Only MCQs are auto-graded, so an all-written assessment couldn't be scored.
+    if (mcqCount === 0) {
+      showBanner("error", "Add at least one multiple-choice question before publishing — written answers aren't auto-graded, so there'd be nothing to score.");
+      return;
+    }
+    setConfirmingPublish(true);
+  }
+
+  async function publishAssessment() {
+    setSaving(true);
+    try {
+      await saveAssessment({ status: "Active", passingScore: parsedPassingScore() });
+      setConfirmingPublish(false);
+      showBanner("success", "Assessment published. It is now live for candidates.");
+    } catch (err) {
+      setConfirmingPublish(false);
+      showBanner("error", err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const deletingQuestion = questions.find((q) => q.id === deletingQuestionId);
@@ -445,120 +586,178 @@ export default function AdminAssessmentEditorPage() {
         </header>
 
         <main className="p-10">
-          {publishedMessage && (
-            <div className="mb-5 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm px-4 py-3">
-              {publishedMessage}
+          <Link
+            to="/admin/assessments"
+            className="mb-4 inline-block text-sm font-semibold text-primary hover:underline"
+          >
+            ← Back to assessments
+          </Link>
+
+          {banner && (
+            <div
+              className={`mb-5 flex items-start justify-between gap-4 rounded-xl border px-4 py-3 text-sm ${
+                banner.kind === "success"
+                  ? "bg-green-50 border-green-200 text-green-800"
+                  : "bg-red-50 border-red-200 text-red-700"
+              }`}
+            >
+              <span>{banner.text}</span>
+              <button onClick={() => setBanner(null)} aria-label="Dismiss">
+                ✕
+              </button>
             </div>
           )}
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-8 space-y-4">
-            {questions.map((q, index) => (
-              <div
-                key={q.id}
-                className="bg-slate-50 border border-slate-200 rounded-xl p-5"
+          {loading && (
+            <p className="py-10 text-center text-sm text-slate-500">Loading assessment…</p>
+          )}
+
+          {!loading && loadError && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
+              <p className="font-semibold text-slate-900">{loadError}</p>
+              <Link
+                to="/admin/assessments"
+                className="mt-3 inline-block text-sm font-semibold text-primary hover:underline"
               >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-slate-500">
-                    QUESTION {index + 1}
-                  </span>
-                  <div className="flex items-center gap-4">
-                    <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-primary text-xs font-semibold">
-                      {q.type}
-                    </span>
-                    <button
-                      onClick={() => openEditQuestion(index)}
-                      className="text-primary text-xs font-medium"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => setDeletingQuestionId(q.id)}
-                      className="text-red-600 text-xs font-medium"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-                <p className="text-sm font-medium text-slate-900 mb-2">
-                  {q.prompt || "Untitled question"}
-                </p>
-                {q.type === "MCQ" ? (
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                    {q.options.map((opt, i) => (
-                      <span
-                        key={i}
-                        className={
-                          i === q.correctIndex
-                            ? "text-green-700 font-semibold"
-                            : "text-slate-500"
-                        }
-                      >
-                        {i === q.correctIndex ? "✓ " : ""}
-                        {String.fromCharCode(65 + i)}. {opt || "(empty)"}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    {q.type === "Short answer"
-                      ? "Candidate types a brief written answer."
-                      : "Candidate types a longer, free-form written answer."}
-                  </p>
-                )}
+                Back to assessments
+              </Link>
+            </div>
+          )}
+
+          {!loading && !loadError && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8 space-y-4">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                <span
+                  className={`px-2.5 py-0.5 rounded-full font-semibold ${
+                    assessment.status === "Active"
+                      ? "bg-green-50 text-green-700"
+                      : assessment.status === "Draft"
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {assessment.status}
+                </span>
+                <span>{assessment.skill?.name}</span>
+                <span>·</span>
+                <span>{assessment.difficulty}</span>
+                <span>·</span>
+                <span>
+                  {questions.length} question{questions.length === 1 ? "" : "s"} ({mcqCount} scored)
+                </span>
               </div>
-            ))}
 
-            {questions.length === 0 && (
-              <p className="text-sm text-slate-500 text-center py-6">
-                No questions yet. Add one to get started.
-              </p>
-            )}
+              {questions.map((q, index) => (
+                <div
+                  key={q.id}
+                  className="bg-slate-50 border border-slate-200 rounded-xl p-5"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs font-semibold text-slate-500">
+                      QUESTION {index + 1}
+                    </span>
+                    <div className="flex items-center gap-4">
+                      <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-primary text-xs font-semibold">
+                        {q.type}
+                      </span>
+                      <button
+                        onClick={() => openEditQuestion(index)}
+                        className="text-primary text-xs font-medium"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => {
+                          setModalError("");
+                          setDeletingQuestionId(q.id);
+                        }}
+                        className="text-red-600 text-xs font-medium"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-slate-900 mb-2">
+                    {q.questionText}
+                  </p>
+                  {q.type === "MCQ" ? (
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                      {(q.options || []).map((opt, i) => {
+                        const correct = opt === q.correctAnswer;
+                        return (
+                          <span
+                            key={i}
+                            className={correct ? "text-green-700 font-semibold" : "text-slate-500"}
+                          >
+                            {correct ? "✓ " : ""}
+                            {String.fromCharCode(65 + i)}. {opt}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      {q.type === "Short answer"
+                        ? "Candidate types a brief written answer. Saved, not auto-graded."
+                        : "Candidate types a longer, free-form written answer. Saved, not auto-graded."}
+                    </p>
+                  )}
+                </div>
+              ))}
 
-            <button
-              onClick={addQuestion}
-              className="w-full py-4 rounded-xl border-2 border-dashed border-slate-300 text-sm font-medium text-slate-400 hover:text-primary hover:border-primary"
-            >
-              + Add another question
-            </button>
+              {questions.length === 0 && (
+                <p className="text-sm text-slate-500 text-center py-6">
+                  No questions yet. Add one to get started.
+                </p>
+              )}
 
-            <div className="border-t border-slate-100 pt-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
+              <button
+                onClick={addQuestion}
+                className="w-full py-4 rounded-xl border-2 border-dashed border-slate-300 text-sm font-medium text-slate-400 hover:text-primary hover:border-primary"
+              >
+                + Add another question
+              </button>
+
+              <div className="border-t border-slate-100 pt-6 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <label className="text-sm text-slate-600">
+                  <label htmlFor="passingScore" className="text-sm text-slate-600">
                     Passing score
                   </label>
                   <input
+                    id="passingScore"
                     type="number"
                     min={0}
                     max={100}
                     value={passingScore}
                     onChange={(e) => setPassingScore(e.target.value)}
+                    onBlur={savePassingScore}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.currentTarget.blur();
+                    }}
                     className="w-20 px-3 py-2 rounded-lg border border-slate-300 text-sm"
                   />
                   <span className="text-sm text-slate-600">%</span>
+                  <span className="text-xs text-slate-400">Based on multiple-choice questions only</span>
                 </div>
-                {draftSavedAt && (
-                  <span className="text-xs text-slate-500">
-                    Draft saved at {draftSavedAt}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={saveDraft}
-                  className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold text-sm hover:bg-slate-50"
-                >
-                  Save draft
-                </button>
-                <button
-                  onClick={() => setConfirmingPublish(true)}
-                  className="px-8 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark"
-                >
-                  Publish assessment
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={saveDraft}
+                    disabled={saving}
+                    className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold text-sm hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    Save draft
+                  </button>
+                  <button
+                    onClick={requestPublish}
+                    disabled={saving}
+                    className="px-8 py-2.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark disabled:opacity-60"
+                  >
+                    {assessment.status === "Active" ? "Update published assessment" : "Publish assessment"}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </main>
       </div>
 
@@ -594,20 +793,26 @@ export default function AdminAssessmentEditorPage() {
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
             </div>
+            <ErrorText>{modalError}</ErrorText>
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Save
+              {saving ? "Saving…" : "Save"}
             </button>
           </form>
         </Modal>
       )}
 
-      {/* Edit question modal */}
+      {/* Add / edit question modal */}
       {editingQuestion && (
         <Modal
-          title={`Edit question ${editingQuestion.index + 1}`}
+          title={
+            editingQuestion.data.id
+              ? `Edit question ${editingQuestion.index + 1}`
+              : `New question ${editingQuestion.index + 1}`
+          }
           onClose={() => setEditingQuestion(null)}
         >
           <form onSubmit={saveQuestion} className="space-y-4">
@@ -631,8 +836,8 @@ export default function AdminAssessmentEditorPage() {
                 Question
               </label>
               <textarea
-                value={editingQuestion.data.prompt}
-                onChange={(e) => updateEditingField("prompt", e.target.value)}
+                value={editingQuestion.data.questionText}
+                onChange={(e) => updateEditingField("questionText", e.target.value)}
                 rows={3}
                 placeholder="Write the question"
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
@@ -653,6 +858,7 @@ export default function AdminAssessmentEditorPage() {
                         checked={editingQuestion.data.correctIndex === i}
                         onChange={() => updateEditingField("correctIndex", i)}
                         title="Mark as correct answer"
+                        aria-label={`Mark option ${String.fromCharCode(65 + i)} as correct`}
                       />
                       <input
                         value={opt}
@@ -680,22 +886,24 @@ export default function AdminAssessmentEditorPage() {
                   + Add option
                 </button>
                 <p className="text-xs text-slate-500 mt-2">
-                  Select the radio button next to the correct answer.
+                  Select the radio button next to the correct answer. Empty options are left out.
                 </p>
               </div>
             ) : (
               <p className="text-xs text-slate-500">
                 {editingQuestion.data.type === "Short answer"
-                  ? "Candidates will type a brief written answer. No options needed."
-                  : "Candidates will type a longer, free-form written answer. No options needed."}
+                  ? "Candidates will type a brief written answer. No options needed — it's saved but not auto-graded."
+                  : "Candidates will type a longer, free-form written answer. No options needed — it's saved but not auto-graded."}
               </p>
             )}
 
+            <ErrorText>{modalError}</ErrorText>
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Save question
+              {saving ? "Saving…" : "Save question"}
             </button>
           </form>
         </Modal>
@@ -712,20 +920,24 @@ export default function AdminAssessmentEditorPage() {
             undone.
           </p>
           <p className="text-sm font-medium text-slate-900 mb-5">
-            "{deletingQuestion.prompt || "Untitled question"}"
+            "{deletingQuestion.questionText}"
           </p>
+          <div className="mb-5">
+            <ErrorText>{modalError}</ErrorText>
+          </div>
           <div className="flex gap-3">
             <button
               onClick={() => setDeletingQuestionId(null)}
               className="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700"
             >
-              Cancel
+              {modalError ? "Close" : "Cancel"}
             </button>
             <button
               onClick={confirmDeleteQuestion}
-              className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+              disabled={saving || Boolean(modalError)}
+              className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
             >
-              Delete question
+              {saving ? "Deleting…" : "Delete question"}
             </button>
           </div>
         </Modal>
@@ -743,8 +955,8 @@ export default function AdminAssessmentEditorPage() {
               {assessment.title}
             </span>{" "}
             with {questions.length} question{questions.length === 1 ? "" : "s"}{" "}
-            and a passing score of {passingScore}%? Once published, it becomes
-            visible to candidates.
+            ({mcqCount} scored) and a passing score of {passingScore}%? Once
+            published, it becomes visible to candidates.
           </p>
           <div className="flex gap-3">
             <button
@@ -755,9 +967,10 @@ export default function AdminAssessmentEditorPage() {
             </button>
             <button
               onClick={publishAssessment}
-              className="flex-1 py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="flex-1 py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Yes, publish
+              {saving ? "Publishing…" : "Yes, publish"}
             </button>
           </div>
         </Modal>

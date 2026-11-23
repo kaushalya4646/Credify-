@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/admin/dashboard" },
@@ -101,63 +102,99 @@ function Modal({ title, onClose, children }) {
 
 const SKILL_TYPES = ["Technical skill", "Soft skill", "Tool/platform"];
 const STATUS_OPTIONS = ["Active", "Draft", "Inactive"];
+const UNCATEGORIZED = "Uncategorized";
+const NOT_SET = "Not set";
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
-// TODO (backend step): replace with the real skill taxonomy from the API.
-const initialSkillCategories = [
-  {
-    category: "Programming",
-    type: "Technical skill",
-    skills: ["Java", "Python"],
-    usage: "1,248 candidates",
-    status: "Active",
-  },
-  {
-    category: "Database management",
-    type: "Technical skill",
-    skills: ["SQL", "PostgreSQL"],
-    usage: "864 candidates",
-    status: "Active",
-  },
-  {
-    category: "API development",
-    type: "Technical skill",
-    skills: ["REST APIs", "API Testing"],
-    usage: "742 candidates",
-    status: "Active",
-  },
-];
+// Group the flat skill list into one row per category. Category-level type and
+// status come from the member skills; if they disagree the row shows "Mixed".
+function groupByCategory(skills) {
+  const groups = new Map();
+  for (const s of skills) {
+    const key = s.category ?? null;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(s);
+  }
+  const rows = [...groups.entries()].map(([category, members]) => {
+    const types = [...new Set(members.map((m) => m.type ?? null))];
+    const statuses = [...new Set(members.map((m) => m.status))];
+    return {
+      key: category ?? "__uncategorized__",
+      category,
+      label: category ?? UNCATEGORIZED,
+      uncategorized: category == null,
+      skills: [...members].sort((a, b) => a.name.localeCompare(b.name)),
+      type: types.length === 1 ? types[0] : "Mixed",
+      status: statuses.length === 1 ? statuses[0] : "Mixed",
+      usage: members.reduce((sum, m) => sum + (m.usage || 0), 0),
+    };
+  });
+  // Named categories alphabetically, "Uncategorized" last.
+  return rows.sort((a, b) =>
+    a.uncategorized ? 1 : b.uncategorized ? -1 : a.label.localeCompare(b.label),
+  );
+}
+
+function typeLabel(type) {
+  return type ?? NOT_SET;
+}
+
+function statusClasses(status) {
+  if (status === "Active") return "bg-green-50 text-green-700";
+  if (status === "Draft") return "bg-amber-50 text-amber-700";
+  if (status === "Mixed") return "bg-blue-50 text-primary";
+  return "bg-slate-100 text-slate-600";
+}
+
+function parseSkills(text) {
+  return [
+    ...new Set(
+      text
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
+  ];
+}
 
 function emptyCategoryForm() {
-  return {
-    category: "",
-    type: SKILL_TYPES[0],
-    status: "Active",
-    skillsText: "",
-  };
+  return { category: "", type: SKILL_TYPES[0], status: "Active", skillsText: "" };
+}
+
+function ErrorText({ children }) {
+  if (!children) return null;
+  return (
+    <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+      {children}
+    </p>
+  );
 }
 
 export default function AdminSkillsPage() {
-  const [skillCategories, setSkillCategories] = useState(
-    initialSkillCategories,
-  );
+  const [skills, setSkills] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [notice, setNotice] = useState(""); // page-level error from row actions
+
   const [searchText, setSearchText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Skill category");
   const [typeFilter, setTypeFilter] = useState("Skill type");
   const [statusFilter, setStatusFilter] = useState("Status");
 
   const [addingSkill, setAddingSkill] = useState(false);
-  const [skillForm, setSkillForm] = useState({
-    name: "",
-    category: initialSkillCategories[0].category,
-  });
+  const [skillForm, setSkillForm] = useState({ name: "", category: "" });
 
-  const [addingCategory, setAddingCategory] = useState(false);
-  const [categoryForm, setCategoryForm] = useState(emptyCategoryForm());
+  // categoryModal: { mode: "add" | "edit" | "duplicate", original?: row, form }
+  const [categoryModal, setCategoryModal] = useState(null);
+  // Skill names that already belong to another category and would be moved.
+  const [moveWarning, setMoveWarning] = useState(null);
 
-  const [openMenuIndex, setOpenMenuIndex] = useState(null);
-  const [editingCategory, setEditingCategory] = useState(null); // { index, data: { ...row, skillsText } }
-  const [deletingCategory, setDeletingCategory] = useState(null); // { index, name }
-  const [viewingCategory, setViewingCategory] = useState(null);
+  const [openMenuKey, setOpenMenuKey] = useState(null);
+  const [deletingRow, setDeletingRow] = useState(null);
+  const [viewingRow, setViewingRow] = useState(null);
+
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState("");
 
   // header dropdown state: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -177,149 +214,234 @@ export default function AdminSkillsPage() {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
-  const categoryOptions = [
-    "Skill category",
-    ...new Set(skillCategories.map((c) => c.category)),
-  ];
-  const typeOptions = [
-    "Skill type",
-    ...new Set(skillCategories.map((c) => c.type)),
-  ];
-  const statusOptions = [
-    "Status",
-    ...new Set(skillCategories.map((c) => c.status)),
-  ];
+  async function loadSkills() {
+    try {
+      setSkills((await api.get("/api/skills")) || []);
+      setLoadError("");
+    } catch (err) {
+      console.error("Failed to load skills:", err);
+      setLoadError(err.message || "Could not load skills.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const filtered = skillCategories.filter((c) => {
+  useEffect(() => {
+    loadSkills();
+  }, []);
+
+  const rows = groupByCategory(skills);
+  const namedRows = rows.filter((r) => !r.uncategorized);
+
+  // ---- Stats ----
+  const totalSkills = skills.length;
+  const categoryCount = namedRows.length;
+  const verifiedCount = skills.filter((s) => s.usage > 0).length;
+  const verifiedPct = totalSkills
+    ? Math.round((verifiedCount / totalSkills) * 100)
+    : 0;
+  const now = Date.now();
+  const recentCount = skills.filter(
+    (s) => now - new Date(s.createdAt).getTime() <= THIRTY_DAYS_MS,
+  ).length;
+
+  // ---- Filters ----
+  const categoryOptions = ["Skill category", ...rows.map((r) => r.label)];
+  const typeOptions = ["Skill type", ...new Set(rows.map((r) => typeLabel(r.type)))];
+  const statusOptions = ["Status", ...new Set(rows.map((r) => r.status))];
+
+  const search = searchText.trim().toLowerCase();
+  const filtered = rows.filter((r) => {
     if (
-      searchText &&
-      !c.category.toLowerCase().includes(searchText.toLowerCase()) &&
-      !c.skills.some((s) => s.toLowerCase().includes(searchText.toLowerCase()))
+      search &&
+      !r.label.toLowerCase().includes(search) &&
+      !r.skills.some((s) => s.name.toLowerCase().includes(search))
     )
       return false;
-    if (categoryFilter !== "Skill category" && c.category !== categoryFilter)
-      return false;
-    if (typeFilter !== "Skill type" && c.type !== typeFilter) return false;
-    if (statusFilter !== "Status" && c.status !== statusFilter) return false;
+    if (categoryFilter !== "Skill category" && r.label !== categoryFilter) return false;
+    if (typeFilter !== "Skill type" && typeLabel(r.type) !== typeFilter) return false;
+    if (statusFilter !== "Status" && r.status !== statusFilter) return false;
     return true;
   });
 
-  function parseSkills(text) {
-    return text
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+  function closeModals() {
+    setAddingSkill(false);
+    setCategoryModal(null);
+    setMoveWarning(null);
+    setDeletingRow(null);
+    setModalError("");
   }
 
   // ---- Add skill ----
   function openAddSkill() {
-    setSkillForm({ name: "", category: skillCategories[0]?.category || "" });
+    setSkillForm({ name: "", category: namedRows[0]?.category ?? "" });
+    setModalError("");
     setAddingSkill(true);
   }
 
-  function saveNewSkill(e) {
+  async function saveNewSkill(e) {
     e.preventDefault();
-    if (!skillForm.name.trim()) return;
-    setSkillCategories((prev) =>
-      prev.map((c) =>
-        c.category === skillForm.category
-          ? { ...c, skills: [...c.skills, skillForm.name.trim()] }
-          : c,
-      ),
-    );
-    setAddingSkill(false);
+    const name = skillForm.name.trim();
+    if (!name) {
+      setModalError("Enter a skill name.");
+      return;
+    }
+    // New skills inherit the category's type/status (Active if it's mixed).
+    const row = namedRows.find((r) => r.category === skillForm.category);
+    setSaving(true);
+    try {
+      await api.post("/api/skills", {
+        name,
+        category: skillForm.category || null,
+        type: row && row.type !== "Mixed" ? row.type : null,
+        status: row && row.status !== "Mixed" ? row.status : "Active",
+      });
+      closeModals();
+      await loadSkills();
+    } catch (err) {
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  // ---- Add skill category ----
+  // ---- Add / edit / duplicate category ----
   function openAddCategory() {
-    setCategoryForm(emptyCategoryForm());
-    setAddingCategory(true);
+    setModalError("");
+    setMoveWarning(null);
+    setCategoryModal({ mode: "add", form: emptyCategoryForm() });
   }
 
-  function saveNewCategory(e) {
-    e.preventDefault();
-    const newCategory = {
-      category: categoryForm.category || "Untitled category",
-      type: categoryForm.type,
-      status: categoryForm.status,
-      skills: parseSkills(categoryForm.skillsText),
-      usage: "0 candidates",
+  function formFromRow(row) {
+    return {
+      category: row.category,
+      type: row.type === "Mixed" ? SKILL_TYPES[0] : (row.type ?? ""),
+      status: row.status === "Mixed" ? "Active" : row.status,
+      skillsText: row.skills.map((s) => s.name).join(", "),
     };
-    setSkillCategories((prev) => [newCategory, ...prev]);
-    setAddingCategory(false);
+  }
+
+  function openEditCategory(row) {
+    setOpenMenuKey(null);
+    setModalError("");
+    setMoveWarning(null);
+    setCategoryModal({ mode: "edit", original: row, form: formFromRow(row) });
+  }
+
+  // Skill names are unique, so a duplicate copies the category's settings
+  // but needs its own skills (re-using the names would move the originals).
+  function openDuplicateCategory(row) {
+    setOpenMenuKey(null);
+    setModalError("");
+    setMoveWarning(null);
+    setCategoryModal({
+      mode: "duplicate",
+      original: row,
+      form: { ...formFromRow(row), category: `${row.category} (copy)`, skillsText: "" },
+    });
+  }
+
+  function updateCategoryForm(field, value) {
+    setMoveWarning(null);
+    setCategoryModal((prev) => ({ ...prev, form: { ...prev.form, [field]: value } }));
+  }
+
+  async function saveCategory(e) {
+    e.preventDefault();
+    const { mode, original, form } = categoryModal;
+    const category = form.category.trim();
+    const skillNames = parseSkills(form.skillsText);
+    if (!category) {
+      setModalError("Enter a category name.");
+      return;
+    }
+    if (category.toLowerCase() === UNCATEGORIZED.toLowerCase()) {
+      setModalError(`"${UNCATEGORIZED}" is reserved for skills without a category.`);
+      return;
+    }
+    if (skillNames.length === 0) {
+      setModalError("Add at least one skill.");
+      return;
+    }
+
+    // Saving re-assigns any listed skill that currently lives in another
+    // category. Make the admin confirm that before it happens.
+    const ownCategory = mode === "edit" ? original.category : null;
+    const moving = skills.filter(
+      (s) =>
+        skillNames.some((n) => n.toLowerCase() === s.name.toLowerCase()) &&
+        s.category !== ownCategory &&
+        s.category !== category,
+    );
+    if (moving.length > 0 && !moveWarning) {
+      setMoveWarning(moving);
+      return;
+    }
+
+    const body = {
+      type: form.type || null,
+      status: form.status,
+      skillNames,
+    };
+    setSaving(true);
+    setModalError("");
+    try {
+      if (mode === "edit") {
+        await api.put(
+          `/api/skills/categories/${encodeURIComponent(original.category)}`,
+          { ...body, newCategoryName: category },
+        );
+      } else {
+        await api.post("/api/skills/categories", { ...body, category });
+      }
+      closeModals();
+      await loadSkills();
+    } catch (err) {
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ---- Row actions ----
-  function toggleMenu(index) {
-    setOpenMenuIndex((prev) => (prev === index ? null : index));
+  function toggleMenu(key) {
+    setOpenMenuKey((prev) => (prev === key ? null : key));
   }
 
-  function viewDetails(c) {
-    setOpenMenuIndex(null);
-    setViewingCategory(c);
+  function viewDetails(row) {
+    setOpenMenuKey(null);
+    setViewingRow(row);
   }
 
-  function duplicateCategory(index) {
-    setSkillCategories((prev) => {
-      const original = prev[index];
-      const copy = {
-        ...original,
-        category: `${original.category} (copy)`,
-        usage: "0 candidates",
-      };
-      const next = [...prev];
-      next.splice(index + 1, 0, copy);
-      return next;
-    });
-    setOpenMenuIndex(null);
+  async function toggleStatus(row) {
+    setOpenMenuKey(null);
+    setNotice("");
+    // Update each skill's status on its own so their individual types are kept.
+    const status = row.status === "Active" ? "Inactive" : "Active";
+    try {
+      await Promise.all(
+        row.skills.map((s) => api.put(`/api/skills/${s.id}`, { status })),
+      );
+      await loadSkills();
+    } catch (err) {
+      setNotice(err.message);
+    }
   }
 
-  function toggleStatus(index) {
-    setSkillCategories((prev) =>
-      prev.map((c, i) =>
-        i === index
-          ? { ...c, status: c.status === "Active" ? "Inactive" : "Active" }
-          : c,
-      ),
-    );
-    setOpenMenuIndex(null);
+  async function confirmDelete() {
+    setSaving(true);
+    setModalError("");
+    try {
+      await api.delete(`/api/skills/categories/${encodeURIComponent(deletingRow.category)}`);
+      closeModals();
+      await loadSkills();
+    } catch (err) {
+      // Includes the backend's "these skills are in use: …" message on 409.
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
-
-  function openEditCategory(index) {
-    const c = skillCategories[index];
-    setEditingCategory({
-      index,
-      data: { ...c, skillsText: c.skills.join(", ") },
-    });
-    setOpenMenuIndex(null);
-  }
-
-  function saveEdit(e) {
-    e.preventDefault();
-    setSkillCategories((prev) =>
-      prev.map((c, i) =>
-        i === editingCategory.index
-          ? {
-              ...editingCategory.data,
-              skills: parseSkills(editingCategory.data.skillsText),
-            }
-          : c,
-      ),
-    );
-    setEditingCategory(null);
-  }
-
-  function confirmDelete() {
-    setSkillCategories((prev) =>
-      prev.filter((_, i) => i !== deletingCategory.index),
-    );
-    setDeletingCategory(null);
-  }
-
-  const totalSkills = skillCategories.reduce(
-    (sum, c) => sum + c.skills.length,
-    0,
-  );
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -514,6 +636,15 @@ export default function AdminSkillsPage() {
         </header>
 
         <main className="p-10 space-y-6">
+          {notice && (
+            <div className="flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <span>{notice}</span>
+              <button onClick={() => setNotice("")} aria-label="Dismiss">
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-4 gap-6">
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Total skills</p>
@@ -525,47 +656,23 @@ export default function AdminSkillsPage() {
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Skill categories</p>
               <p className="text-3xl font-bold text-slate-900">
-                {skillCategories.length}
+                {categoryCount}
               </p>
               <p className="text-xs text-slate-500 mt-2">Macro skills</p>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Verified skills</p>
-              <p className="text-3xl font-bold text-slate-900">64</p>
-              <p className="text-xs text-slate-500 mt-2">74% of all skills</p>
+              <p className="text-3xl font-bold text-slate-900">
+                {verifiedCount}
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                {verifiedPct}% of all skills verified by a candidate
+              </p>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Recently added</p>
-              <p className="text-3xl font-bold text-slate-900">7</p>
+              <p className="text-3xl font-bold text-slate-900">{recentCount}</p>
               <p className="text-xs text-slate-500 mt-2">In the last 30 days</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-6">
-            <h2 className="font-medium text-slate-900 mb-4">Skill structure</h2>
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3 text-xs text-slate-500 font-semibold">
-              <span>Macro skill</span>
-              <span>Micro skills</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-slate-900">
-                Database management
-              </span>
-              <div className="flex gap-2">
-                {[
-                  "SQL",
-                  "PostgreSQL",
-                  "Database design",
-                  "Query optimization",
-                ].map((s) => (
-                  <span
-                    key={s}
-                    className="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium"
-                  >
-                    {s}
-                  </span>
-                ))}
-              </div>
             </div>
           </div>
 
@@ -620,160 +727,185 @@ export default function AdminSkillsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c, i) => (
-                  <tr
-                    key={c.category + i}
-                    className="border-t border-slate-100"
-                  >
-                    <td className="py-3 font-semibold text-slate-900">
-                      {c.category}
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        {c.skills.map((s) => (
-                          <span
-                            key={s}
-                            className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium"
-                          >
-                            ✓ {s}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="text-slate-600">{c.usage}</td>
-                    <td>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          c.status === "Active"
-                            ? "bg-green-50 text-green-700"
-                            : c.status === "Draft"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="relative">
-                      <div className="flex gap-2 text-slate-400">
-                        <button
-                          onClick={() => toggleMenu(i)}
-                          className="hover:text-slate-600"
-                        >
-                          ⋯
-                        </button>
-                        <button
-                          onClick={() => openEditCategory(i)}
-                          className="text-primary hover:text-primary-dark"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() =>
-                            setDeletingCategory({ index: i, name: c.category })
-                          }
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      {openMenuIndex === i && (
-                        <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
-                          <button
-                            onClick={() => viewDetails(c)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            View details
-                          </button>
-                          <button
-                            onClick={() => duplicateCategory(i)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            Duplicate category
-                          </button>
-                          <button
-                            onClick={() => toggleStatus(i)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            {c.status === "Active" ? "Deactivate" : "Activate"}
-                          </button>
-                        </div>
-                      )}
+                {loading && (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-sm text-slate-500">
+                      Loading skills…
                     </td>
                   </tr>
-                ))}
-                {filtered.length === 0 && (
+                )}
+                {!loading && loadError && (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-sm text-red-600">
+                      {loadError}
+                    </td>
+                  </tr>
+                )}
+                {!loading &&
+                  !loadError &&
+                  filtered.map((r) => (
+                    <tr key={r.key} className="border-t border-slate-100">
+                      <td className="py-3 pr-4 align-top">
+                        <p
+                          className={`font-semibold ${r.uncategorized ? "text-slate-500 italic" : "text-slate-900"}`}
+                        >
+                          {r.label}
+                        </p>
+                        <p className="text-xs text-slate-500">{typeLabel(r.type)}</p>
+                      </td>
+                      <td className="py-3 pr-4">
+                        <div className="flex flex-wrap gap-2">
+                          {r.skills.map((s) => (
+                            <span
+                              key={s.id}
+                              className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium"
+                            >
+                              ✓ {s.name}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="text-slate-600 pr-4">
+                        {r.usage} verification{r.usage === 1 ? "" : "s"}
+                      </td>
+                      <td className="pr-4">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses(r.status)}`}
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="relative">
+                        <div className="flex gap-2 text-slate-400">
+                          <button
+                            onClick={() => toggleMenu(r.key)}
+                            className="hover:text-slate-600"
+                            aria-label={`More actions for ${r.label}`}
+                          >
+                            ⋯
+                          </button>
+                          {!r.uncategorized && (
+                            <>
+                              <button
+                                onClick={() => openEditCategory(r)}
+                                className="text-primary hover:text-primary-dark"
+                                aria-label={`Edit ${r.label}`}
+                              >
+                                ✎
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setModalError("");
+                                  setDeletingRow(r);
+                                }}
+                                className="text-red-600 hover:text-red-700"
+                                aria-label={`Delete ${r.label}`}
+                              >
+                                ✕
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        {openMenuKey === r.key && (
+                          <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
+                            <button
+                              onClick={() => viewDetails(r)}
+                              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              View details
+                            </button>
+                            {!r.uncategorized && (
+                              <>
+                                <button
+                                  onClick={() => openDuplicateCategory(r)}
+                                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                  Duplicate category
+                                </button>
+                                <button
+                                  onClick={() => toggleStatus(r)}
+                                  className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                                >
+                                  {r.status === "Active" ? "Deactivate" : "Activate"}
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                {!loading && !loadError && filtered.length === 0 && (
                   <tr>
                     <td
                       colSpan={5}
                       className="py-8 text-center text-sm text-slate-500"
                     >
-                      No skill categories match these filters.
+                      {rows.length === 0
+                        ? "No skills yet. Add a skill category to get started."
+                        : "No skill categories match these filters."}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
             <p className="text-xs text-slate-500 mt-4">
-              Showing {filtered.length} of {skillCategories.length} categories
+              Showing {filtered.length} of {rows.length} group
+              {rows.length === 1 ? "" : "s"}
+              {rows.some((r) => r.uncategorized) && " (including Uncategorized)"}
             </p>
           </div>
         </main>
       </div>
 
       {/* View details modal */}
-      {viewingCategory && (
-        <Modal
-          title={viewingCategory.category}
-          onClose={() => setViewingCategory(null)}
-        >
+      {viewingRow && (
+        <Modal title={viewingRow.label} onClose={() => setViewingRow(null)}>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-slate-500 mb-1">Skill type</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingCategory.type}
+                  {typeLabel(viewingRow.type)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Status</p>
                 <span
-                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    viewingCategory.status === "Active"
-                      ? "bg-green-50 text-green-700"
-                      : viewingCategory.status === "Draft"
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-slate-100 text-slate-600"
-                  }`}
+                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses(viewingRow.status)}`}
                 >
-                  {viewingCategory.status}
+                  {viewingRow.status}
                 </span>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Usage</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingCategory.usage}
+                  {viewingRow.usage} verification
+                  {viewingRow.usage === 1 ? "" : "s"}
                 </p>
               </div>
             </div>
 
             <div className="border-t border-slate-100 pt-4">
               <p className="text-xs text-slate-500 mb-2">Micro skills</p>
-              <div className="flex flex-wrap gap-2">
-                {viewingCategory.skills.map((s) => (
-                  <span
-                    key={s}
-                    className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium"
-                  >
-                    ✓ {s}
-                  </span>
+              <ul className="space-y-2">
+                {viewingRow.skills.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-slate-900">{s.name}</span>
+                    <span className="flex items-center gap-2 text-xs text-slate-500">
+                      {s.usage} verified
+                      <span className={`px-2 py-0.5 rounded-full font-medium ${statusClasses(s.status)}`}>
+                        {s.status}
+                      </span>
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
 
             <button
-              onClick={() => setViewingCategory(null)}
+              onClick={() => setViewingRow(null)}
               className="w-full min-h-11 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
             >
               Close
@@ -784,7 +916,7 @@ export default function AdminSkillsPage() {
 
       {/* Add skill modal */}
       {addingSkill && (
-        <Modal title="Add skill" onClose={() => setAddingSkill(false)}>
+        <Modal title="Add skill" onClose={closeModals}>
           <form onSubmit={saveNewSkill} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -813,44 +945,49 @@ export default function AdminSkillsPage() {
                 }
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               >
-                {skillCategories.map((c) => (
-                  <option key={c.category}>{c.category}</option>
+                {namedRows.map((r) => (
+                  <option key={r.key} value={r.category}>
+                    {r.label}
+                  </option>
                 ))}
+                <option value="">{UNCATEGORIZED}</option>
               </select>
               <p className="text-xs text-slate-500 mt-1.5">
-                This skill will be added as a micro skill under the chosen
-                category.
+                The new skill takes this category's type and status.
               </p>
             </div>
+            <ErrorText>{modalError}</ErrorText>
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Add skill
+              {saving ? "Adding…" : "Add skill"}
             </button>
           </form>
         </Modal>
       )}
 
-      {/* Add skill category modal */}
-      {addingCategory && (
+      {/* Add / edit / duplicate category modal */}
+      {categoryModal && (
         <Modal
-          title="Add skill category"
-          onClose={() => setAddingCategory(false)}
+          title={
+            categoryModal.mode === "edit"
+              ? `Edit ${categoryModal.original.label}`
+              : categoryModal.mode === "duplicate"
+                ? `Duplicate ${categoryModal.original.label}`
+                : "Add skill category"
+          }
+          onClose={closeModals}
         >
-          <form onSubmit={saveNewCategory} className="space-y-4">
+          <form onSubmit={saveCategory} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Category name
               </label>
               <input
-                value={categoryForm.category}
-                onChange={(e) =>
-                  setCategoryForm((prev) => ({
-                    ...prev,
-                    category: e.target.value,
-                  }))
-                }
+                value={categoryModal.form.category}
+                onChange={(e) => updateCategoryForm("category", e.target.value)}
                 placeholder="e.g. Cloud infrastructure"
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
@@ -860,12 +997,11 @@ export default function AdminSkillsPage() {
                 Skill type
               </label>
               <select
-                value={categoryForm.type}
-                onChange={(e) =>
-                  setCategoryForm((prev) => ({ ...prev, type: e.target.value }))
-                }
+                value={categoryModal.form.type}
+                onChange={(e) => updateCategoryForm("type", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               >
+                <option value="">{NOT_SET}</option>
                 {SKILL_TYPES.map((t) => (
                   <option key={t}>{t}</option>
                 ))}
@@ -876,13 +1012,8 @@ export default function AdminSkillsPage() {
                 Status
               </label>
               <select
-                value={categoryForm.status}
-                onChange={(e) =>
-                  setCategoryForm((prev) => ({
-                    ...prev,
-                    status: e.target.value,
-                  }))
-                }
+                value={categoryModal.form.status}
+                onChange={(e) => updateCategoryForm("status", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               >
                 {STATUS_OPTIONS.map((s) => (
@@ -895,144 +1026,80 @@ export default function AdminSkillsPage() {
                 Micro skills
               </label>
               <input
-                value={categoryForm.skillsText}
-                onChange={(e) =>
-                  setCategoryForm((prev) => ({
-                    ...prev,
-                    skillsText: e.target.value,
-                  }))
-                }
+                value={categoryModal.form.skillsText}
+                onChange={(e) => updateCategoryForm("skillsText", e.target.value)}
                 placeholder="Comma-separated, e.g. AWS, Azure, GCP"
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
               <p className="text-xs text-slate-500 mt-1.5">
-                Separate each micro skill with a comma.
+                {categoryModal.mode === "edit"
+                  ? "Skills you remove are moved to Uncategorized, not deleted."
+                  : categoryModal.mode === "duplicate"
+                    ? "Skill names are unique, so the copy needs its own skills. Type, status and name are copied."
+                    : "Separate each micro skill with a comma."}
               </p>
             </div>
-            <button
-              type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
-            >
-              Add skill category
-            </button>
-          </form>
-        </Modal>
-      )}
 
-      {/* Edit category modal */}
-      {editingCategory && (
-        <Modal
-          title={`Edit ${editingCategory.data.category}`}
-          onClose={() => setEditingCategory(null)}
-        >
-          <form onSubmit={saveEdit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Category name
-              </label>
-              <input
-                value={editingCategory.data.category}
-                onChange={(e) =>
-                  setEditingCategory((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, category: e.target.value },
-                  }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Skill type
-              </label>
-              <select
-                value={editingCategory.data.type}
-                onChange={(e) =>
-                  setEditingCategory((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, type: e.target.value },
-                  }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              >
-                {SKILL_TYPES.map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Status
-              </label>
-              <select
-                value={editingCategory.data.status}
-                onChange={(e) =>
-                  setEditingCategory((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, status: e.target.value },
-                  }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Micro skills
-              </label>
-              <input
-                value={editingCategory.data.skillsText}
-                onChange={(e) =>
-                  setEditingCategory((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, skillsText: e.target.value },
-                  }))
-                }
-                placeholder="Comma-separated, e.g. AWS, Azure, GCP"
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              />
-              <p className="text-xs text-slate-500 mt-1.5">
-                Separate each micro skill with a comma.
-              </p>
-            </div>
+            {moveWarning && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                These skills already belong to another category and will be
+                moved here:{" "}
+                <span className="font-semibold">
+                  {moveWarning
+                    .map((s) => `${s.name} (${s.category ?? UNCATEGORIZED})`)
+                    .join(", ")}
+                </span>
+                . Save again to confirm.
+              </div>
+            )}
+            <ErrorText>{modalError}</ErrorText>
+
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Save changes
+              {saving
+                ? "Saving…"
+                : moveWarning
+                  ? "Move skills and save"
+                  : categoryModal.mode === "edit"
+                    ? "Save changes"
+                    : "Add skill category"}
             </button>
           </form>
         </Modal>
       )}
 
       {/* Delete confirmation modal */}
-      {deletingCategory && (
-        <Modal
-          title="Delete skill category"
-          onClose={() => setDeletingCategory(null)}
-        >
+      {deletingRow && (
+        <Modal title="Delete skill category" onClose={closeModals}>
           <p className="text-sm text-slate-600 mb-5">
             Are you sure you want to delete{" "}
             <span className="font-semibold text-slate-900">
-              {deletingCategory.name}
+              {deletingRow.label}
             </span>{" "}
-            and all its micro skills? This cannot be undone.
+            and its {deletingRow.skills.length} skill
+            {deletingRow.skills.length === 1 ? "" : "s"}? This cannot be
+            undone. Skills used by career roles, assessments or verifications
+            can't be deleted.
           </p>
+          <div className="mb-5">
+            <ErrorText>{modalError}</ErrorText>
+          </div>
           <div className="flex gap-3">
             <button
-              onClick={() => setDeletingCategory(null)}
+              onClick={closeModals}
               className="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700"
             >
-              Cancel
+              {modalError ? "Close" : "Cancel"}
             </button>
             <button
               onClick={confirmDelete}
-              className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+              disabled={saving || Boolean(modalError)}
+              className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
             >
-              Delete category
+              {saving ? "Deleting…" : "Delete category"}
             </button>
           </div>
         </Modal>

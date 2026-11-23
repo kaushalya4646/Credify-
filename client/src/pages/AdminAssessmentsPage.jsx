@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/admin/dashboard" },
@@ -99,54 +100,83 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-// TODO (backend step): replace with real assessments from the API.
-const initialAssessments = [
-  {
-    name: "Java Programming",
-    skill: "Java",
-    difficulty: "Intermediate",
-    type: "MCQ",
-    questions: 20,
-    attempts: 1284,
-    avg: "78%",
-    status: "Active",
-    updated: "1 min ago",
-  },
-  {
-    name: "SQL Fundamentals",
-    skill: "SQL",
-    difficulty: "Intermediate",
-    type: "MCQ",
-    questions: 15,
-    attempts: 964,
-    avg: "71%",
-    status: "Active",
-    updated: "14 hours ago",
-  },
-  {
-    name: "REST API Development",
-    skill: "REST APIs",
-    difficulty: "Advanced",
-    type: "Coding",
-    questions: 20,
-    attempts: 486,
-    avg: "68%",
-    status: "Active",
-    updated: "1 day ago",
-  },
-];
+const DIFFICULTIES = ["Beginner", "Intermediate", "Advanced"];
+const ASSESSMENT_TYPES = ["MCQ", "Mixed", "Written"];
+const STATUSES = ["Draft", "Active", "Inactive"];
+
+function statusClasses(status) {
+  if (status === "Active") return "bg-green-50 text-green-700";
+  if (status === "Draft") return "bg-amber-50 text-amber-700";
+  return "bg-slate-100 text-slate-600";
+}
+
+function formatScore(score) {
+  return score == null ? "—" : `${score}%`;
+}
+
+function timeAgo(value) {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 60) return "just now";
+  const units = [
+    ["year", 31536000],
+    ["month", 2592000],
+    ["day", 86400],
+    ["hour", 3600],
+    ["min", 60],
+  ];
+  for (const [name, size] of units) {
+    const n = Math.floor(seconds / size);
+    if (n >= 1) return `${n} ${name}${n === 1 ? "" : "s"} ago`;
+  }
+  return "just now";
+}
+
+// Empty strings from number inputs become null; anything else a whole number.
+function toOptionalInt(value) {
+  if (value === "" || value == null) return null;
+  return Number(value);
+}
+
+function emptyCreateForm(skills) {
+  return {
+    title: "",
+    skillId: skills[0]?.id ?? "",
+    difficulty: DIFFICULTIES[0],
+    type: ASSESSMENT_TYPES[0],
+    durationMinutes: "",
+  };
+}
+
+function ErrorText({ children }) {
+  if (!children) return null;
+  return (
+    <p className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+      {children}
+    </p>
+  );
+}
 
 export default function AdminAssessmentsPage() {
-  const [assessments, setAssessments] = useState(initialAssessments);
+  const navigate = useNavigate();
+  const [assessments, setAssessments] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [notice, setNotice] = useState(""); // page-level error from row actions
+
   const [searchText, setSearchText] = useState("");
   const [skillFilter, setSkillFilter] = useState("Skill");
   const [difficultyFilter, setDifficultyFilter] = useState("Difficulty");
   const [statusFilter, setStatusFilter] = useState("Status");
   const [typeFilter, setTypeFilter] = useState("Assessment type");
-  const [openMenuIndex, setOpenMenuIndex] = useState(null);
-  const [editingAssessment, setEditingAssessment] = useState(null);
-  const [deletingAssessment, setDeletingAssessment] = useState(null);
-  const [viewingAssessment, setViewingAssessment] = useState(null);
+  const [openMenuId, setOpenMenuId] = useState(null);
+
+  const [creating, setCreating] = useState(null); // create form | null
+  const [editing, setEditing] = useState(null); // { id, data } | null
+  const [deleting, setDeleting] = useState(null); // assessment | null
+  const [viewing, setViewing] = useState(null); // assessment | null
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState("");
 
   // header dropdown state: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -166,82 +196,204 @@ export default function AdminAssessmentsPage() {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
-  const skillOptions = ["Skill", ...new Set(assessments.map((a) => a.skill))];
-  const difficultyOptions = [
-    "Difficulty",
-    ...new Set(assessments.map((a) => a.difficulty)),
-  ];
-  const statusOptions = [
-    "Status",
-    ...new Set(assessments.map((a) => a.status)),
-  ];
-  const typeOptions = [
-    "Assessment type",
-    ...new Set(assessments.map((a) => a.type)),
-  ];
+  async function loadAssessments() {
+    try {
+      setAssessments((await api.get("/api/assessments")) || []);
+      setLoadError("");
+    } catch (err) {
+      console.error("Failed to load assessments:", err);
+      setLoadError(err.message || "Could not load assessments.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
+  useEffect(() => {
+    loadAssessments();
+    api
+      .get("/api/skills")
+      .then((data) => setSkills(data || []))
+      .catch((err) => console.error("Failed to load skills:", err));
+  }, []);
+
+  // ---- Stats (all computed from the admin list, which includes every status) ----
+  const total = assessments.length;
+  const activeCount = assessments.filter((a) => a.status === "Active").length;
+  const totalAttempts = assessments.reduce((sum, a) => sum + (a.attemptsCount || 0), 0);
+  // Weighted by each assessment's attempt count; null until anyone has a score.
+  const scored = assessments.filter((a) => a.avgScore != null && a.attemptsCount > 0);
+  const scoredAttempts = scored.reduce((sum, a) => sum + a.attemptsCount, 0);
+  const overallAvg = scoredAttempts
+    ? Math.round(scored.reduce((sum, a) => sum + a.avgScore * a.attemptsCount, 0) / scoredAttempts)
+    : null;
+
+  // ---- Filters ----
+  const skillName = (a) => a.skill?.name ?? "—";
+  const skillOptions = ["Skill", ...new Set(assessments.map(skillName))];
+  const difficultyOptions = ["Difficulty", ...new Set(assessments.map((a) => a.difficulty))];
+  const statusOptions = ["Status", ...new Set(assessments.map((a) => a.status))];
+  const typeOptions = ["Assessment type", ...new Set(assessments.map((a) => a.type))];
+
+  const search = searchText.trim().toLowerCase();
   const filtered = assessments.filter((a) => {
-    if (searchText && !a.name.toLowerCase().includes(searchText.toLowerCase()))
-      return false;
-    if (skillFilter !== "Skill" && a.skill !== skillFilter) return false;
-    if (difficultyFilter !== "Difficulty" && a.difficulty !== difficultyFilter)
-      return false;
+    if (search && !a.title.toLowerCase().includes(search)) return false;
+    if (skillFilter !== "Skill" && skillName(a) !== skillFilter) return false;
+    if (difficultyFilter !== "Difficulty" && a.difficulty !== difficultyFilter) return false;
     if (statusFilter !== "Status" && a.status !== statusFilter) return false;
     if (typeFilter !== "Assessment type" && a.type !== typeFilter) return false;
     return true;
   });
 
-  function toggleMenu(index) {
-    setOpenMenuIndex((prev) => (prev === index ? null : index));
+  function closeModals() {
+    setCreating(null);
+    setEditing(null);
+    setDeleting(null);
+    setModalError("");
   }
 
-  function toggleStatus(index) {
-    setAssessments((prev) =>
-      prev.map((a, i) =>
-        i === index
-          ? { ...a, status: a.status === "Active" ? "Inactive" : "Active" }
-          : a,
-      ),
-    );
-    setOpenMenuIndex(null);
+  // ---- Create ----
+  function openCreate() {
+    setModalError("");
+    setCreating(emptyCreateForm(skills));
   }
 
-  function duplicateAssessment(index) {
-    setAssessments((prev) => {
-      const original = prev[index];
-      const copy = {
-        ...original,
-        name: `${original.name} (copy)`,
-        attempts: 0,
-        updated: "just now",
-      };
-      const next = [...prev];
-      next.splice(index + 1, 0, copy);
-      return next;
+  async function saveCreate(e) {
+    e.preventDefault();
+    if (!creating.title.trim()) return setModalError("Enter a title.");
+    if (!creating.skillId) return setModalError("Choose a skill.");
+    const durationMinutes = toOptionalInt(creating.durationMinutes);
+    if (durationMinutes != null && (!Number.isInteger(durationMinutes) || durationMinutes <= 0)) {
+      return setModalError("Duration must be a whole number of minutes.");
+    }
+    setSaving(true);
+    setModalError("");
+    try {
+      // New assessments are created as Draft; questions are added in the editor.
+      const created = await api.post("/api/assessments", {
+        title: creating.title.trim(),
+        skillId: creating.skillId,
+        difficulty: creating.difficulty,
+        type: creating.type,
+        durationMinutes,
+      });
+      navigate(`/admin/assessments/editor/${created.id}`);
+    } catch (err) {
+      setModalError(err.message);
+      setSaving(false);
+    }
+  }
+
+  // ---- Edit ----
+  function openEdit(a) {
+    setOpenMenuId(null);
+    setModalError("");
+    setEditing({
+      id: a.id,
+      questionCount: a._count?.questions ?? 0,
+      data: {
+        title: a.title,
+        description: a.description ?? "",
+        skillId: a.skillId,
+        difficulty: a.difficulty,
+        type: a.type,
+        durationMinutes: a.durationMinutes ?? "",
+        passingScore: a.passingScore,
+        status: a.status,
+      },
     });
-    setOpenMenuIndex(null);
+  }
+
+  function updateEdit(field, value) {
+    setEditing((prev) => ({ ...prev, data: { ...prev.data, [field]: value } }));
+  }
+
+  async function saveEdit(e) {
+    e.preventDefault();
+    const d = editing.data;
+    const durationMinutes = toOptionalInt(d.durationMinutes);
+    const passingScore = Number(d.passingScore);
+    if (!d.title.trim()) return setModalError("Enter a title.");
+    if (durationMinutes != null && (!Number.isInteger(durationMinutes) || durationMinutes <= 0)) {
+      return setModalError("Duration must be a whole number of minutes.");
+    }
+    if (!Number.isInteger(passingScore) || passingScore < 0 || passingScore > 100) {
+      return setModalError("Passing score must be a whole number from 0 to 100.");
+    }
+    if (d.status === "Active" && editing.questionCount === 0) {
+      return setModalError("Add at least one question in the editor before making this assessment Active.");
+    }
+    setSaving(true);
+    setModalError("");
+    try {
+      await api.put(`/api/assessments/${editing.id}`, {
+        title: d.title.trim(),
+        description: d.description.trim() || null,
+        skillId: d.skillId,
+        difficulty: d.difficulty,
+        type: d.type,
+        durationMinutes,
+        passingScore,
+        status: d.status,
+      });
+      closeModals();
+      await loadAssessments();
+    } catch (err) {
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ---- Row actions ----
+  function toggleMenu(id) {
+    setOpenMenuId((prev) => (prev === id ? null : id));
   }
 
   function viewDetails(a) {
-    setOpenMenuIndex(null);
-    setViewingAssessment(a);
+    setOpenMenuId(null);
+    setViewing(a);
   }
 
-  function saveEdit(e) {
-    e.preventDefault();
-    setAssessments((prev) =>
-      prev.map((a, i) =>
-        i === editingAssessment.index ? { ...editingAssessment.data } : a,
-      ),
-    );
-    setEditingAssessment(null);
+  async function duplicateAssessment(a) {
+    setOpenMenuId(null);
+    setNotice("");
+    try {
+      await api.post(`/api/assessments/${a.id}/duplicate`, {});
+      await loadAssessments();
+    } catch (err) {
+      setNotice(err.message);
+    }
   }
 
-  function confirmDelete() {
-    setAssessments((prev) =>
-      prev.filter((_, i) => i !== deletingAssessment.index),
-    );
-    setDeletingAssessment(null);
+  async function toggleStatus(a) {
+    setOpenMenuId(null);
+    setNotice("");
+    const status = a.status === "Active" ? "Inactive" : "Active";
+    if (status === "Active" && (a._count?.questions ?? 0) === 0) {
+      setNotice(`"${a.title}" has no questions yet. Add questions in the editor before activating it.`);
+      return;
+    }
+    try {
+      await api.put(`/api/assessments/${a.id}`, { status });
+      await loadAssessments();
+    } catch (err) {
+      setNotice(err.message);
+    }
+  }
+
+  async function confirmDelete() {
+    setSaving(true);
+    setModalError("");
+    try {
+      await api.delete(`/api/assessments/${deleting.id}`);
+      closeModals();
+      await loadAssessments();
+    } catch (err) {
+      // Shows the backend's "candidates have already attempted it" message on 409.
+      setModalError(err.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -258,12 +410,12 @@ export default function AdminAssessmentsPage() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <Link
-              to="/admin/assessments/editor"
+            <button
+              onClick={openCreate}
               className="px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
             >
               Create assessment
-            </Link>
+            </button>
             <div className="flex items-center gap-4" ref={menuRef}>
               {/* Help dropdown */}
               <div className="relative">
@@ -430,29 +582,40 @@ export default function AdminAssessmentsPage() {
         </header>
 
         <main className="p-10 space-y-6">
+          {notice && (
+            <div className="flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <span>{notice}</span>
+              <button onClick={() => setNotice("")} aria-label="Dismiss">
+                ✕
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-4 gap-6">
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Total assessments</p>
-              <p className="text-3xl font-bold text-slate-900">42</p>
-              <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                ↑ 12.7%
-              </span>
+              <p className="text-3xl font-bold text-slate-900">{total}</p>
+              <p className="text-xs text-slate-500 mt-2">All statuses</p>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Active assessments</p>
-              <p className="text-3xl font-bold text-slate-900">36</p>
-              <p className="text-xs text-slate-500 mt-2">of 42 total</p>
+              <p className="text-3xl font-bold text-slate-900">{activeCount}</p>
+              <p className="text-xs text-slate-500 mt-2">of {total} total</p>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Completed attempts</p>
-              <p className="text-3xl font-bold text-slate-900">8,426</p>
+              <p className="text-3xl font-bold text-slate-900">
+                {totalAttempts.toLocaleString()}
+              </p>
               <p className="text-xs text-slate-500 mt-2">
                 Across all assessments
               </p>
             </div>
             <div className="bg-white rounded-2xl border border-slate-200 p-6">
               <p className="text-sm text-slate-500 mb-2">Average score</p>
-              <p className="text-3xl font-bold text-slate-900">74%</p>
+              <p className="text-3xl font-bold text-slate-900">
+                {formatScore(overallAvg)}
+              </p>
               <p className="text-xs text-slate-500 mt-2">
                 Across completed attempts
               </p>
@@ -523,170 +686,199 @@ export default function AdminAssessmentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((a, i) => (
-                  <tr key={a.name + i} className="border-t border-slate-100">
-                    <td className="py-3 font-semibold text-slate-900">
-                      {a.name}
-                    </td>
-                    <td>
-                      <span className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium">
-                        ✓ {a.skill}
-                      </span>
-                    </td>
-                    <td className="text-slate-600">{a.difficulty}</td>
-                    <td className="text-slate-900">{a.questions}</td>
-                    <td className="text-slate-900">
-                      {a.attempts.toLocaleString()}
-                    </td>
-                    <td className="font-semibold text-slate-900">{a.avg}</td>
-                    <td>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          a.status === "Active"
-                            ? "bg-green-50 text-green-700"
-                            : "bg-slate-100 text-slate-600"
-                        }`}
-                      >
-                        {a.status}
-                      </span>
-                    </td>
-                    <td className="text-slate-600">{a.updated}</td>
-                    <td className="relative">
-                      <div className="flex gap-2 text-slate-400">
-                        <button
-                          onClick={() => toggleMenu(i)}
-                          className="hover:text-slate-600"
-                        >
-                          ⋯
-                        </button>
-                        <button
-                          onClick={() =>
-                            setEditingAssessment({ index: i, data: { ...a } })
-                          }
-                          className="text-primary hover:text-primary-dark"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() =>
-                            setDeletingAssessment({ index: i, name: a.name })
-                          }
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          ✕
-                        </button>
-                      </div>
-
-                      {openMenuIndex === i && (
-                        <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
-                          <button
-                            onClick={() => viewDetails(a)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            View details
-                          </button>
-                          <button
-                            onClick={() => duplicateAssessment(i)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            Duplicate assessment
-                          </button>
-                          <button
-                            onClick={() => toggleStatus(i)}
-                            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                          >
-                            {a.status === "Active" ? "Deactivate" : "Activate"}
-                          </button>
-                        </div>
-                      )}
+                {loading && (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-sm text-slate-500">
+                      Loading assessments…
                     </td>
                   </tr>
-                ))}
-                {filtered.length === 0 && (
+                )}
+                {!loading && loadError && (
+                  <tr>
+                    <td colSpan={9} className="py-8 text-center text-sm text-red-600">
+                      {loadError}
+                    </td>
+                  </tr>
+                )}
+                {!loading &&
+                  !loadError &&
+                  filtered.map((a) => (
+                    <tr key={a.id} className="border-t border-slate-100">
+                      <td className="py-3 pr-3">
+                        <Link
+                          to={`/admin/assessments/editor/${a.id}`}
+                          className="font-semibold text-slate-900 hover:text-primary hover:underline"
+                        >
+                          {a.title}
+                        </Link>
+                        <p className="text-xs text-slate-500">{a.type}</p>
+                      </td>
+                      <td className="pr-3">
+                        <span className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium">
+                          ✓ {skillName(a)}
+                        </span>
+                      </td>
+                      <td className="text-slate-600">{a.difficulty}</td>
+                      <td className="text-slate-900">{a._count?.questions ?? 0}</td>
+                      <td className="text-slate-900">
+                        {(a.attemptsCount ?? 0).toLocaleString()}
+                      </td>
+                      <td
+                        className={`font-semibold ${a.avgScore == null ? "text-slate-400" : "text-slate-900"}`}
+                      >
+                        {formatScore(a.avgScore)}
+                      </td>
+                      <td>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses(a.status)}`}
+                        >
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="text-slate-600" title={new Date(a.updatedAt).toLocaleString()}>
+                        {timeAgo(a.updatedAt)}
+                      </td>
+                      <td className="relative">
+                        <div className="flex gap-2 text-slate-400">
+                          <button
+                            onClick={() => toggleMenu(a.id)}
+                            className="hover:text-slate-600"
+                            aria-label={`More actions for ${a.title}`}
+                          >
+                            ⋯
+                          </button>
+                          <button
+                            onClick={() => openEdit(a)}
+                            className="text-primary hover:text-primary-dark"
+                            aria-label={`Edit ${a.title}`}
+                          >
+                            ✎
+                          </button>
+                          <button
+                            onClick={() => {
+                              setModalError("");
+                              setDeleting(a);
+                            }}
+                            className="text-red-600 hover:text-red-700"
+                            aria-label={`Delete ${a.title}`}
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        {openMenuId === a.id && (
+                          <div className="absolute right-0 top-8 z-10 w-48 rounded-xl border border-slate-200 bg-white shadow-lg py-1">
+                            <button
+                              onClick={() => viewDetails(a)}
+                              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              View details
+                            </button>
+                            <button
+                              onClick={() => navigate(`/admin/assessments/editor/${a.id}`)}
+                              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              Edit questions
+                            </button>
+                            <button
+                              onClick={() => duplicateAssessment(a)}
+                              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              Duplicate assessment
+                            </button>
+                            <button
+                              onClick={() => toggleStatus(a)}
+                              className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              {a.status === "Active" ? "Deactivate" : "Activate"}
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                {!loading && !loadError && filtered.length === 0 && (
                   <tr>
                     <td
                       colSpan={9}
                       className="py-8 text-center text-sm text-slate-500"
                     >
-                      No assessments match these filters.
+                      {total === 0
+                        ? "No assessments yet. Create one to get started."
+                        : "No assessments match these filters."}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
             <p className="text-xs text-slate-500 mt-4">
-              Showing {filtered.length} of 42 assessments
+              Showing {filtered.length} of {total} assessment{total === 1 ? "" : "s"}
             </p>
           </div>
         </main>
       </div>
 
       {/* View details modal */}
-      {viewingAssessment && (
-        <Modal
-          title={viewingAssessment.name}
-          onClose={() => setViewingAssessment(null)}
-        >
+      {viewing && (
+        <Modal title={viewing.title} onClose={() => setViewing(null)}>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs text-slate-500 mb-1">Skill</p>
                 <span className="inline-block px-2.5 py-1 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium">
-                  ✓ {viewingAssessment.skill}
+                  ✓ {skillName(viewing)}
                 </span>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Difficulty</p>
-                <p className="text-sm font-medium text-slate-900">
-                  {viewingAssessment.difficulty}
-                </p>
+                <p className="text-sm font-medium text-slate-900">{viewing.difficulty}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Type</p>
-                <p className="text-sm font-medium text-slate-900">
-                  {viewingAssessment.type}
-                </p>
+                <p className="text-sm font-medium text-slate-900">{viewing.type}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Status</p>
                 <span
-                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    viewingAssessment.status === "Active"
-                      ? "bg-green-50 text-green-700"
-                      : "bg-slate-100 text-slate-600"
-                  }`}
+                  className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${statusClasses(viewing.status)}`}
                 >
-                  {viewingAssessment.status}
+                  {viewing.status}
                 </span>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Questions</p>
-                <p className="text-sm font-medium text-slate-900">
-                  {viewingAssessment.questions}
-                </p>
+                <p className="text-sm font-medium text-slate-900">{viewing._count?.questions ?? 0}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Attempts</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingAssessment.attempts.toLocaleString()}
+                  {(viewing.attemptsCount ?? 0).toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Average score</p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {viewingAssessment.avg}
+                <p className="text-sm font-semibold text-slate-900">{formatScore(viewing.avgScore)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Passing score</p>
+                <p className="text-sm font-medium text-slate-900">{viewing.passingScore}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500 mb-1">Duration</p>
+                <p className="text-sm font-medium text-slate-900">
+                  {viewing.durationMinutes ? `${viewing.durationMinutes} mins` : "No time limit"}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Last updated</p>
                 <p className="text-sm font-medium text-slate-900">
-                  {viewingAssessment.updated}
+                  {new Date(viewing.updatedAt).toLocaleString()}
                 </p>
               </div>
             </div>
 
             <button
-              onClick={() => setViewingAssessment(null)}
+              onClick={() => setViewing(null)}
               className="w-full min-h-11 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
             >
               Close
@@ -695,150 +887,222 @@ export default function AdminAssessmentsPage() {
         </Modal>
       )}
 
-      {/* Edit assessment modal */}
-      {editingAssessment && (
-        <Modal
-          title={`Edit ${editingAssessment.data.name}`}
-          onClose={() => setEditingAssessment(null)}
-        >
-          <form onSubmit={saveEdit} className="space-y-4">
+      {/* Create assessment modal */}
+      {creating && (
+        <Modal title="Create assessment" onClose={closeModals}>
+          <form onSubmit={saveCreate} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Assessment name
-              </label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Title</label>
               <input
-                value={editingAssessment.data.name}
-                onChange={(e) =>
-                  setEditingAssessment((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, name: e.target.value },
-                  }))
-                }
+                value={creating.title}
+                onChange={(e) => setCreating((p) => ({ ...p, title: e.target.value }))}
+                placeholder="e.g. SQL Fundamentals"
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Skill
-              </label>
-              <input
-                value={editingAssessment.data.skill}
-                onChange={(e) =>
-                  setEditingAssessment((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, skill: e.target.value },
-                  }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Difficulty
-              </label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Skill</label>
               <select
-                value={editingAssessment.data.difficulty}
-                onChange={(e) =>
-                  setEditingAssessment((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, difficulty: e.target.value },
-                  }))
-                }
+                value={creating.skillId}
+                onChange={(e) => setCreating((p) => ({ ...p, skillId: e.target.value }))}
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               >
-                <option>Beginner</option>
-                <option>Intermediate</option>
-                <option>Advanced</option>
+                {skills.length === 0 && <option value="">No skills available</option>}
+                {skills.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                    {s.status !== "Active" ? ` (${s.status})` : ""}
+                  </option>
+                ))}
               </select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Difficulty</label>
+                <select
+                  value={creating.difficulty}
+                  onChange={(e) => setCreating((p) => ({ ...p, difficulty: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+                >
+                  {DIFFICULTIES.map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Type</label>
+                <select
+                  value={creating.type}
+                  onChange={(e) => setCreating((p) => ({ ...p, type: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+                >
+                  {ASSESSMENT_TYPES.map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Assessment type
-              </label>
-              <select
-                value={editingAssessment.data.type}
-                onChange={(e) =>
-                  setEditingAssessment((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, type: e.target.value },
-                  }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              >
-                <option>MCQ</option>
-                <option>Coding</option>
-                <option>Mixed</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Number of questions
+                Duration (minutes)
               </label>
               <input
                 type="number"
-                value={editingAssessment.data.questions}
-                onChange={(e) =>
-                  setEditingAssessment((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, questions: Number(e.target.value) },
-                  }))
-                }
+                min={1}
+                value={creating.durationMinutes}
+                onChange={(e) => setCreating((p) => ({ ...p, durationMinutes: e.target.value }))}
+                placeholder="Leave blank for no time limit"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+              />
+            </div>
+            <p className="text-xs text-slate-500">
+              The assessment is created as a Draft. You'll add questions and publish it in the editor next.
+            </p>
+            <ErrorText>{modalError}</ErrorText>
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
+            >
+              {saving ? "Creating…" : "Create and add questions"}
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Edit assessment modal */}
+      {editing && (
+        <Modal title={`Edit ${editing.data.title || "assessment"}`} onClose={closeModals}>
+          <form onSubmit={saveEdit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Assessment name</label>
+              <input
+                value={editing.data.title}
+                onChange={(e) => updateEdit("title", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Status
-              </label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Description</label>
+              <textarea
+                value={editing.data.description}
+                onChange={(e) => updateEdit("description", e.target.value)}
+                rows={2}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Skill</label>
               <select
-                value={editingAssessment.data.status}
-                onChange={(e) =>
-                  setEditingAssessment((prev) => ({
-                    ...prev,
-                    data: { ...prev.data, status: e.target.value },
-                  }))
-                }
+                value={editing.data.skillId}
+                onChange={(e) => updateEdit("skillId", e.target.value)}
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
               >
-                <option>Active</option>
-                <option>Inactive</option>
+                {skills.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                    {s.status !== "Active" ? ` (${s.status})` : ""}
+                  </option>
+                ))}
               </select>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Difficulty</label>
+                <select
+                  value={editing.data.difficulty}
+                  onChange={(e) => updateEdit("difficulty", e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+                >
+                  {[...new Set([...DIFFICULTIES, editing.data.difficulty])].map((d) => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Assessment type</label>
+                <select
+                  value={editing.data.type}
+                  onChange={(e) => updateEdit("type", e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+                >
+                  {[...new Set([...ASSESSMENT_TYPES, editing.data.type])].map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Duration (minutes)</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={editing.data.durationMinutes}
+                  onChange={(e) => updateEdit("durationMinutes", e.target.value)}
+                  placeholder="No limit"
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Passing score (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={editing.data.passingScore}
+                  onChange={(e) => updateEdit("passingScore", e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Status</label>
+              <select
+                value={editing.data.status}
+                onChange={(e) => updateEdit("status", e.target.value)}
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            <ErrorText>{modalError}</ErrorText>
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Save changes
+              {saving ? "Saving…" : "Save changes"}
             </button>
           </form>
         </Modal>
       )}
 
       {/* Delete confirmation modal */}
-      {deletingAssessment && (
-        <Modal
-          title="Delete assessment"
-          onClose={() => setDeletingAssessment(null)}
-        >
+      {deleting && (
+        <Modal title="Delete assessment" onClose={closeModals}>
           <p className="text-sm text-slate-600 mb-5">
             Are you sure you want to delete{" "}
-            <span className="font-semibold text-slate-900">
-              {deletingAssessment.name}
-            </span>
-            ? This cannot be undone.
+            <span className="font-semibold text-slate-900">{deleting.title}</span>{" "}
+            and its {deleting._count?.questions ?? 0} question
+            {(deleting._count?.questions ?? 0) === 1 ? "" : "s"}? This cannot be undone.
           </p>
+          <div className="mb-5">
+            <ErrorText>{modalError}</ErrorText>
+          </div>
           <div className="flex gap-3">
             <button
-              onClick={() => setDeletingAssessment(null)}
+              onClick={closeModals}
               className="flex-1 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700"
             >
-              Cancel
+              {modalError ? "Close" : "Cancel"}
             </button>
             <button
               onClick={confirmDelete}
-              className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700"
+              disabled={saving || Boolean(modalError)}
+              className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
             >
-              Delete assessment
+              {saving ? "Deleting…" : "Delete assessment"}
             </button>
           </div>
         </Modal>

@@ -100,7 +100,7 @@ export default function App() {
 
       <Route path="/recruiter/jobs" element={<ProtectedRoute role="RECRUITER"><MyJobsPage /></ProtectedRoute>} />
 
-      <Route path="/admin/assessments/editor" element={<ProtectedRoute role="ADMIN"><AdminAssessmentEditorPage /></ProtectedRoute>} />
+      <Route path="/admin/assessments/editor/:id" element={<ProtectedRoute role="ADMIN"><AdminAssessmentEditorPage /></ProtectedRoute>} />
       <Route path="/admin/content" element={<ProtectedRoute role="ADMIN"><AdminPlatformContentPage /></ProtectedRoute>} />
 
       <Route path="*" element={<NotFoundPage />} />
