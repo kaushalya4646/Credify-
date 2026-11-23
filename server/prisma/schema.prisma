@@ -78,6 +78,8 @@ model Skill {
   id        String   @id @default(uuid())
   name      String   @unique
   category  String?
+  type      String?
+  status    String   @default("Active")
   createdAt DateTime @default(now())
   careerRoles CareerRoleSkill[]
   assessments Assessment[]
