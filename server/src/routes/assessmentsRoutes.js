@@ -10,6 +10,8 @@ const {
   updateAssessment,
   duplicateAssessment,
   deleteAssessment,
+  updateQuestion,
+  deleteQuestion,
 } = require("../controllers/assessmentsController");
 const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
@@ -25,6 +27,8 @@ router.put("/:id", requireAuth, requireRole("ADMIN"), updateAssessment);
 router.delete("/:id", requireAuth, requireRole("ADMIN"), deleteAssessment);
 router.post("/:id/duplicate", requireAuth, requireRole("ADMIN"), duplicateAssessment);
 router.post("/:id/questions", requireAuth, requireRole("ADMIN"), addQuestion);
+router.put("/:id/questions/:questionId", requireAuth, requireRole("ADMIN"), updateQuestion);
+router.delete("/:id/questions/:questionId", requireAuth, requireRole("ADMIN"), deleteQuestion);
 router.post(
   "/:id/attempts",
   requireAuth,

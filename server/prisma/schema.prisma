@@ -131,8 +131,23 @@ model AssessmentQuestion {
   assessmentId   String
   assessment     Assessment @relation(fields: [assessmentId], references: [id])
   questionText   String
-  options        Json?
-  correctAnswer  String
+  type           String     @default("MCQ") // "MCQ" | "Short answer" | "Long answer"
+  options        Json?      // MCQ only: array of option text strings
+  correctAnswer  String?    // MCQ only: must equal one of the options
+  answers        AttemptAnswer[]
+}
+
+// One row per question a candidate answered in an attempt.
+model AttemptAnswer {
+  id         String             @id @default(uuid())
+  attemptId  String
+  attempt    AssessmentAttempt  @relation(fields: [attemptId], references: [id])
+  questionId String
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id])
+  answer     String
+  isCorrect  Boolean? // null for Short/Long answer (not auto-graded)
+
+  @@unique([attemptId, questionId])
 }
 
 model AssessmentAttempt {
@@ -148,6 +163,7 @@ model AssessmentAttempt {
   status           String     @default("In Progress")
   completedAt      DateTime?
   createdAt        DateTime   @default(now())
+  answers          AttemptAnswer[]
 }
 
 model SkillVerification {
