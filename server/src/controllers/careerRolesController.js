@@ -112,6 +112,13 @@ async function selectCareerRole(req, res) {
     });
     res.json(updated);
   } catch (err) {
+    // P2003: careerRoleId doesn't match a role. P2025: this user has no candidate profile.
+    if (err.code === "P2003") {
+      return res.status(404).json({ error: "Career role not found." });
+    }
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: "Candidate profile not found." });
+    }
     console.error(err);
     res.status(500).json({ error: "Could not select career role." });
   }
@@ -213,6 +220,9 @@ async function deleteCareerRole(req, res) {
 
     res.status(204).send();
   } catch (err) {
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: "Career role not found." });
+    }
     console.error(err);
     if (err.code === "P2003") {
       return res.status(409).json({

@@ -532,14 +532,6 @@
       "name": "Skill Verification",
       "item": [
         {
-          "name": "Check Skill Verification (candidate)",
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/api/skill-verifications/check/REPLACE_SKILL_ID",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
-          }
-        },
-        {
           "name": "My Verifications (candidate)",
           "request": {
             "method": "GET",

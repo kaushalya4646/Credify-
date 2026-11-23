@@ -58,6 +58,9 @@ async function setUserActiveStatus(req, res) {
 
     res.json({ id: user.id, isActive: user.isActive });
   } catch (err) {
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: "User not found." });
+    }
     console.error(err);
     res.status(500).json({ error: "Could not update user status." });
   }
@@ -85,6 +88,9 @@ async function updateUser(req, res) {
 
     res.json({ id: user.id, name: user.name, email: user.email, role: user.role });
   } catch (err) {
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: "User not found." });
+    }
     console.error(err);
     res.status(500).json({ error: "Could not update user." });
   }
@@ -105,6 +111,9 @@ async function resetUserPassword(req, res) {
     // returned directly for the admin to relay to the user manually.
     res.json({ tempPassword });
   } catch (err) {
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: "User not found." });
+    }
     console.error(err);
     res.status(500).json({ error: "Could not reset password." });
   }
@@ -116,6 +125,9 @@ async function deleteUser(req, res) {
     await prisma.user.delete({ where: { id } });
     res.status(204).send();
   } catch (err) {
+    if (err.code === "P2025") {
+      return res.status(404).json({ error: "User not found." });
+    }
     console.error(err);
     res.status(500).json({ error: "Could not delete user." });
   }
