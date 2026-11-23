@@ -88,16 +88,18 @@ model CareerRoleSkill {
 }
 
 model Assessment {
-  id         String   @id @default(uuid())
-  skillId    String
-  skill      Skill    @relation(fields: [skillId], references: [id])
-  title      String
-  difficulty String
-  type       String
-  status     String   @default("Active")
-  createdAt  DateTime @default(now())
-  questions  AssessmentQuestion[]
-  attempts   AssessmentAttempt[]
+  id              String   @id @default(uuid())
+  skillId         String
+  skill           Skill    @relation(fields: [skillId], references: [id])
+  title           String
+  description     String?
+  difficulty      String
+  type            String
+  durationMinutes Int?
+  status          String   @default("Active")
+  createdAt       DateTime @default(now())
+  questions       AssessmentQuestion[]
+  attempts        AssessmentAttempt[]
 }
 
 model AssessmentQuestion {
@@ -110,15 +112,18 @@ model AssessmentQuestion {
 }
 
 model AssessmentAttempt {
-  id           String     @id @default(uuid())
-  userId       String
-  user         User       @relation(fields: [userId], references: [id])
-  assessmentId String
-  assessment   Assessment @relation(fields: [assessmentId], references: [id])
-  score        Int?
-  status       String     @default("In Progress")
-  completedAt  DateTime?
-  createdAt    DateTime   @default(now())
+  id               String     @id @default(uuid())
+  userId           String
+  user             User       @relation(fields: [userId], references: [id])
+  assessmentId     String
+  assessment       Assessment @relation(fields: [assessmentId], references: [id])
+  score            Int?
+  correctCount     Int?
+  totalQuestions   Int?
+  timeTakenSeconds Int?
+  status           String     @default("In Progress")
+  completedAt      DateTime?
+  createdAt        DateTime   @default(now())
 }
 
 model SkillVerification {
