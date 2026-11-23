@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { api } from '../api/client'
 
 const navItems = [
   { label: 'Dashboard', path: '/candidate/dashboard' },
@@ -8,123 +9,6 @@ const navItems = [
   { label: 'Skill Gaps', path: '/candidate/skill-gaps' },
   { label: 'My Profile', path: '/candidate/profile' },
 ]
-
-// TODO (backend step): replace this whole bank with the real question sets fetched per assessment id.
-const assessmentBank = {
-  'java-programming': {
-    title: 'Java Programming Assessment',
-    level: 'Elementary',
-    totalQuestions: 20,
-    timeLimit: '30:00',
-    questions: [
-      {
-        text: 'Which concept allows a class to acquire properties and methods from another class?',
-        options: ['Encapsulation', 'Inheritance', 'Abstraction', 'Polymorphism'],
-        correct: 1,
-      },
-      {
-        text: 'What keyword is used to inherit a class in Java?',
-        options: ['implements', 'extends', 'inherits', 'super'],
-        correct: 1,
-      },
-    ],
-  },
-  'sql-database-fundamentals': {
-    title: 'SQL & Database Fundamentals Assessment',
-    level: 'Intermediate',
-    totalQuestions: 15,
-    timeLimit: '25:00',
-    questions: [
-      {
-        text: 'Which SQL clause is used to filter rows after grouping?',
-        options: ['WHERE', 'HAVING', 'GROUP BY', 'ORDER BY'],
-        correct: 1,
-      },
-      {
-        text: 'Which type of join returns only matching rows from both tables?',
-        options: ['LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'FULL OUTER JOIN'],
-        correct: 2,
-      },
-    ],
-  },
-  'rest-api-development': {
-    title: 'REST API Development Assessment',
-    level: 'Intermediate',
-    totalQuestions: 20,
-    timeLimit: '40:00',
-    questions: [
-      {
-        text: 'Which HTTP method is idempotent and used to fully replace a resource?',
-        options: ['POST', 'PUT', 'PATCH', 'GET'],
-        correct: 1,
-      },
-      {
-        text: 'Which status code indicates a successfully created resource?',
-        options: ['200', '201', '204', '301'],
-        correct: 1,
-      },
-    ],
-  },
-  'python-fundamentals': {
-    title: 'Python Fundamentals Assessment',
-    level: 'Beginner',
-    totalQuestions: 18,
-    timeLimit: '25:00',
-    questions: [
-      {
-        text: 'Which data type is immutable in Python?',
-        options: ['List', 'Dictionary', 'Tuple', 'Set'],
-        correct: 2,
-      },
-      {
-        text: 'What does the len() function return for a string?',
-        options: ['Its memory address', 'Its character count', 'Its data type', 'Its index'],
-        correct: 1,
-      },
-    ],
-  },
-  'react-fundamentals': {
-    title: 'React Fundamentals Assessment',
-    level: 'Intermediate',
-    totalQuestions: 20,
-    timeLimit: '35:00',
-    questions: [
-      {
-        text: 'Which hook is used to manage local state in a function component?',
-        options: ['useEffect', 'useState', 'useRef', 'useMemo'],
-        correct: 1,
-      },
-      {
-        text: 'What do you call a function passed as a prop to render custom content?',
-        options: ['A reducer', 'A render prop', 'A context', 'A hook'],
-        correct: 1,
-      },
-    ],
-  },
-  'git-version-control': {
-    title: 'Git & Version Control Assessment',
-    level: 'Beginner',
-    totalQuestions: 12,
-    timeLimit: '20:00',
-    questions: [
-      {
-        text: 'Which command creates a new branch and switches to it in one step?',
-        options: ['git branch', 'git switch -c', 'git merge', 'git clone'],
-        correct: 1,
-      },
-      {
-        text: 'What does "git pull" do?',
-        options: [
-          'Uploads local commits',
-          'Fetches and merges remote changes',
-          'Deletes a branch',
-          'Creates a new repository',
-        ],
-        correct: 1,
-      },
-    ],
-  },
-}
 
 function CandidateSidebar({ activeId }) {
   const location = useLocation()
@@ -184,40 +68,122 @@ function CandidateSidebar({ activeId }) {
   )
 }
 
+function formatClock(totalSeconds) {
+  const s = Math.max(0, totalSeconds)
+  const mm = String(Math.floor(s / 60)).padStart(2, '0')
+  const ss = String(s % 60).padStart(2, '0')
+  return `${mm}:${ss}`
+}
+
+function MessageScreen({ title, message }) {
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center max-w-sm">
+        <h1 className="text-lg font-semibold text-slate-900 mb-2">{title}</h1>
+        {message && <p className="text-sm text-slate-500 mb-6">{message}</p>}
+        <Link to="/candidate/assessments" className="text-primary font-semibold text-sm">
+          Back to assessments
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 export default function AssessmentScreenPage() {
   const { id } = useParams()
-  const assessment = assessmentBank[id]
+  const navigate = useNavigate()
+
+  const [assessment, setAssessment] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [answers, setAnswers] = useState({})
+  const [answers, setAnswers] = useState({}) // questionId -> answer text
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
 
-  if (!assessment) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center max-w-sm">
-          <h1 className="text-lg font-semibold text-slate-900 mb-2">Assessment not found</h1>
-          <p className="text-sm text-slate-500 mb-6">We couldn't find an assessment matching "{id}".</p>
-          <Link to="/candidate/assessments" className="text-primary font-semibold text-sm">
-            Back to assessments
-          </Link>
-        </div>
-      </div>
-    )
+  // Elapsed time is measured from when the questions finish loading.
+  const startedAt = useRef(null)
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      setLoadError('')
+      try {
+        const data = await api.get(`/api/assessments/${id}`)
+        setAssessment(data)
+        setCurrentIndex(0)
+        setAnswers({})
+        startedAt.current = Date.now()
+        setElapsed(0)
+      } catch (err) {
+        console.error('Failed to load assessment:', err)
+        setLoadError(err.message || 'Could not load this assessment.')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [id])
+
+  useEffect(() => {
+    if (!assessment) return
+    const timer = setInterval(() => {
+      if (startedAt.current) setElapsed(Math.floor((Date.now() - startedAt.current) / 1000))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [assessment])
+
+  if (loading) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-slate-500">Loading assessment…</div>
   }
 
-  const { title, level, totalQuestions, timeLimit, questions } = assessment
-  // TODO: once the real question bank is wired up, remove this modulo fallback.
-  const question = questions[currentIndex % questions.length]
+  if (loadError) {
+    return <MessageScreen title="Assessment not found" message={loadError} />
+  }
 
-  function selectAnswer(optionIndex) {
-    setAnswers((prev) => ({ ...prev, [currentIndex]: optionIndex }))
+  const questions = assessment?.questions || []
+  if (questions.length === 0) {
+    return <MessageScreen title="No questions yet" message="This assessment doesn't have any questions yet. Please check back later." />
+  }
+
+  const { title, difficulty, durationMinutes } = assessment
+  const totalQuestions = questions.length
+  const question = questions[currentIndex]
+  const options = Array.isArray(question.options) ? question.options : []
+  const answeredCount = questions.filter((q) => answers[q.id] != null && answers[q.id] !== '').length
+  const unansweredCount = totalQuestions - answeredCount
+  const isLast = currentIndex === totalQuestions - 1
+  const remaining = durationMinutes != null ? durationMinutes * 60 - elapsed : null
+
+  function setAnswer(value) {
+    setAnswers((prev) => ({ ...prev, [question.id]: value }))
   }
 
   function goTo(index) {
-    setCurrentIndex(index)
+    setCurrentIndex(Math.min(Math.max(0, index), totalQuestions - 1))
   }
 
-  const answeredCount = Object.keys(answers).length
+  async function submit() {
+    if (submitting || answeredCount === 0) return
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      const payload = {
+        answers: questions
+          .filter((q) => answers[q.id] != null && answers[q.id] !== '')
+          .map((q) => ({ questionId: q.id, answer: answers[q.id] })),
+        timeTakenSeconds: Math.floor((Date.now() - startedAt.current) / 1000),
+      }
+      const attempt = await api.post(`/api/assessments/${id}/attempts`, payload)
+      navigate(`/candidate/assessments/results/${attempt.id}`)
+    } catch (err) {
+      console.error('Failed to submit attempt:', err)
+      setSubmitError(err.message || 'Could not submit your answers. Please try again.')
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -233,7 +199,7 @@ export default function AssessmentScreenPage() {
             </div>
             <div>
               <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-              <p className="text-sm text-slate-500">Level: {level}</p>
+              <p className="text-sm text-slate-500">Level: {difficulty}</p>
             </div>
           </div>
           <div className="flex items-center gap-8">
@@ -245,8 +211,11 @@ export default function AssessmentScreenPage() {
               <p className="text-xs text-slate-500 mt-1">{answeredCount} answered</p>
             </div>
             <div className="border-l border-slate-200 pl-8">
-              <p className="text-xs text-slate-500 mb-1">Time remaining</p>
-              <p className="text-2xl font-bold text-slate-900">{timeLimit}</p>
+              <p className="text-xs text-slate-500 mb-1">{remaining != null ? 'Time remaining' : 'Time elapsed'}</p>
+              <p className={`text-2xl font-bold ${remaining != null && remaining <= 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                {formatClock(remaining != null ? remaining : elapsed)}
+              </p>
+              {remaining != null && remaining <= 0 && <p className="text-xs text-red-600">Time's up — please submit</p>}
             </div>
           </div>
         </div>
@@ -254,52 +223,82 @@ export default function AssessmentScreenPage() {
         <div className="grid grid-cols-[1fr_350px] gap-6">
           <div className="bg-white rounded-2xl border border-slate-200 p-8">
             <p className="text-sm font-semibold text-primary mb-4">Question {String(currentIndex + 1).padStart(2, '0')}</p>
-            <h2 className="text-xl font-semibold text-slate-900 mb-8">{question.text}</h2>
-            <div className="space-y-4">
-              {question.options.map((option, i) => {
-                const selected = answers[currentIndex] === i
-                return (
-                  <button
-                    key={option}
-                    onClick={() => selectAnswer(i)}
-                    className={`w-full text-left px-5 py-4 rounded-xl border flex items-center gap-3 ${
-                      selected ? 'bg-blue-50 border-primary' : 'border-slate-300'
-                    }`}
-                  >
-                    <span className={`w-5 h-5 rounded-full border-2 flex-shrink-0 ${selected ? 'border-primary bg-primary' : 'border-slate-400'}`} />
-                    <span className={`font-medium ${selected ? 'text-primary' : 'text-slate-900'}`}>
-                      {String.fromCharCode(65 + i)}. {option}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+            <h2 className="text-xl font-semibold text-slate-900 mb-8">{question.questionText}</h2>
+            {options.length > 0 ? (
+              <div className="space-y-4">
+                {options.map((option, i) => {
+                  const selected = answers[question.id] === option
+                  return (
+                    <button
+                      key={`${question.id}-${i}`}
+                      onClick={() => setAnswer(option)}
+                      className={`w-full text-left px-5 py-4 rounded-xl border flex items-center gap-3 ${
+                        selected ? 'bg-blue-50 border-primary' : 'border-slate-300'
+                      }`}
+                    >
+                      <span className={`w-5 h-5 rounded-full border-2 flex-shrink-0 ${selected ? 'border-primary bg-primary' : 'border-slate-400'}`} />
+                      <span className={`font-medium ${selected ? 'text-primary' : 'text-slate-900'}`}>
+                        {String.fromCharCode(65 + i)}. {option}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              // Questions without options are free-text answers.
+              <input
+                value={answers[question.id] || ''}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Type your answer"
+                className="w-full px-5 py-4 rounded-xl border border-slate-300 text-sm"
+              />
+            )}
 
             <div className="flex justify-between mt-10">
               <button
-                onClick={() => goTo(Math.max(0, currentIndex - 1))}
-                className="px-8 py-3 rounded-xl border border-primary text-primary font-semibold text-sm"
+                onClick={() => goTo(currentIndex - 1)}
+                disabled={currentIndex === 0}
+                className="px-8 py-3 rounded-xl border border-primary text-primary font-semibold text-sm disabled:opacity-40"
               >
                 Previous
               </button>
-              <button
-                onClick={() => goTo(Math.min(totalQuestions - 1, currentIndex + 1))}
-                className="px-8 py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark"
-              >
-                Next
-              </button>
+              {isLast ? (
+                <button
+                  onClick={submit}
+                  disabled={submitting || answeredCount === 0}
+                  className="px-8 py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark disabled:opacity-50"
+                >
+                  {submitting ? 'Submitting…' : 'Submit assessment'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => goTo(currentIndex + 1)}
+                  className="px-8 py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark"
+                >
+                  Next
+                </button>
+              )}
             </div>
+            {isLast && answeredCount === 0 && (
+              <p className="mt-3 text-right text-xs text-slate-500">Answer at least one question to submit.</p>
+            )}
+            {isLast && answeredCount > 0 && unansweredCount > 0 && (
+              <p className="mt-3 text-right text-xs text-amber-700">
+                {unansweredCount} unanswered question{unansweredCount === 1 ? '' : 's'} will be marked incorrect.
+              </p>
+            )}
+            {submitError && <p className="mt-3 text-right text-sm text-red-600">{submitError}</p>}
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
             <h3 className="font-semibold text-slate-900 mb-4">Question navigator</h3>
             <div className="grid grid-cols-4 gap-2">
-              {Array.from({ length: totalQuestions }, (_, i) => {
-                const isAnswered = answers[i] !== undefined
+              {questions.map((q, i) => {
+                const isAnswered = answers[q.id] != null && answers[q.id] !== ''
                 const isCurrent = i === currentIndex
                 return (
                   <button
-                    key={i}
+                    key={q.id}
                     onClick={() => goTo(i)}
                     className={`h-10 rounded-lg text-sm font-semibold border ${
                       isCurrent
@@ -319,6 +318,13 @@ export default function AssessmentScreenPage() {
               <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full border-2 border-primary" /> Current</div>
               <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-slate-200" /> Not answered</div>
             </div>
+            <button
+              onClick={submit}
+              disabled={submitting || answeredCount === 0}
+              className="mt-6 w-full py-3 rounded-xl border border-primary text-primary font-semibold text-sm hover:bg-blue-50 disabled:opacity-40"
+            >
+              {submitting ? 'Submitting…' : 'Submit assessment'}
+            </button>
           </div>
         </div>
       </div>
