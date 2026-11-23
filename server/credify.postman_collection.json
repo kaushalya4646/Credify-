@@ -63,6 +63,20 @@
         },
         {
           "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Saves the token so requests using {{adminToken}} work without copy-pasting.",
+                  "if (pm.response.code === 200) {",
+                  "  pm.collectionVariables.set(\"adminToken\", pm.response.json().token);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "url": "{{baseUrl}}/api/auth/login",
@@ -75,6 +89,20 @@
         },
         {
           "name": "Login Candidate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Saves the token so requests using {{candidateToken}} work without copy-pasting.",
+                  "if (pm.response.code === 200) {",
+                  "  pm.collectionVariables.set(\"candidateToken\", pm.response.json().token);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "url": "{{baseUrl}}/api/auth/login",
@@ -87,6 +115,20 @@
         },
         {
           "name": "Login Recruiter",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Saves the token so requests using {{recruiterToken}} work without copy-pasting.",
+                  "if (pm.response.code === 200) {",
+                  "  pm.collectionVariables.set(\"recruiterToken\", pm.response.json().token);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "url": "{{baseUrl}}/api/auth/login",
@@ -177,7 +219,7 @@
               "mode": "raw",
               "raw": "{\"category\": \"Cloud\", \"type\": \"Tool/platform\", \"status\": \"Active\", \"skillNames\": [\"AWS\", \"Azure\", \"GCP\"]}"
             },
-            "description": "Creates each listed skill, or moves an existing skill with that name into this category."
+            "description": "Warning: if skills named AWS, Azure or GCP already exist, running this moves them into the \"Cloud\" category.\n\nCreates each listed skill, or moves an existing skill with that name into this category."
           }
         },
         {
@@ -191,7 +233,7 @@
               "mode": "raw",
               "raw": "{\"newCategoryName\": \"Cloud Platforms\", \"type\": \"Tool/platform\", \"status\": \"Active\", \"skillNames\": [\"AWS\", \"GCP\", \"Terraform\"]}"
             },
-            "description": "URL param is the current category name (URL-encode spaces). Skills dropped from skillNames are unassigned (category: null), never deleted. type/status default to null/\"Active\" if omitted."
+            "description": "Warning: if skills named AWS, GCP or Terraform already exist elsewhere, running this moves them into \"Cloud Platforms\".\n\nURL param is the current category name (URL-encode spaces). Skills dropped from skillNames are unassigned (category: null), never deleted. type/status default to null/\"Active\" if omitted."
           }
         },
         {
@@ -308,166 +350,181 @@
       "name": "Assessments",
       "item": [
         {
-          "name": "List Assessments",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/assessments",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
-          }
-        },
-        {
-          "name": "List Assessments (candidate — Active only)",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/assessments",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] },
-            "description": "Non-admins only see Active assessments. The admin version also returns attemptsCount and avgScore (null when nobody has completed it)."
-          }
-        },
-        {
-          "name": "Get Assessment by Id",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
-          }
-        },
-        {
-          "name": "Get Assessment by Id (admin — includes answers)",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "description": "Same endpoint as above; admins also get each question's correctAnswer."
-          }
-        },
-        {
-          "name": "Create Assessment (admin)",
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/api/assessments",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"skillId\": \"REPLACE_SKILL_ID\", \"title\": \"Node.js Basics\", \"description\": \"Core Node.js concepts.\", \"difficulty\": \"Beginner\", \"type\": \"Multiple Choice\", \"durationMinutes\": 15, \"passingScore\": 70}"
+          "name": "Assessments",
+          "item": [
+            {
+              "name": "List Assessments",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/assessments",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] }
+              }
             },
-            "description": "New assessments are created as Draft (pass status to override). passingScore defaults to 70."
-          }
-        },
-        {
-          "name": "Update Assessment (admin)",
-          "request": {
-            "method": "PUT",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"status\": \"Active\", \"passingScore\": 60}"
+            {
+              "name": "List Assessments (candidate — Active only)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/assessments",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] },
+                "description": "Non-admins only see Active assessments. The admin version also returns attemptsCount and avgScore (null when nobody has completed it)."
+              }
             },
-            "description": "Only the fields sent are changed. Accepts title, description, skillId, difficulty, type, durationMinutes, passingScore, status (Active | Draft | Inactive)."
-          }
-        },
-        {
-          "name": "Duplicate Assessment (admin)",
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/duplicate",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "description": "Copies the assessment and its questions as a Draft titled \"… (copy)\"."
-          }
-        },
-        {
-          "name": "Delete Assessment (admin)",
-          "request": {
-            "method": "DELETE",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "description": "409 if any candidate has attempted it; otherwise deletes it and its questions."
-          }
-        },
-        {
-          "name": "Add Question (admin)",
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"questionText\": \"What keyword declares a constant in JS?\", \"type\": \"MCQ\", \"options\": [\"var\", \"let\", \"const\"], \"correctAnswer\": \"const\"}"
+            {
+              "name": "Get Assessment by Id",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
+              }
             },
-            "description": "MCQ: options needs at least two non-empty strings and correctAnswer must match one exactly. Questions are added at the end (position = max + 1)."
-          }
-        },
-        {
-          "name": "Add Short Answer Question (admin)",
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"questionText\": \"In one sentence, what is Node.js?\", \"type\": \"Short answer\"}"
+            {
+              "name": "Get Assessment by Id (admin — includes answers)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "description": "Same endpoint as above; admins also get each question's correctAnswer."
+              }
             },
-            "description": "Short answer / Long answer questions take no options or correctAnswer."
-          }
-        },
-        {
-          "name": "Update Question (admin)",
-          "request": {
-            "method": "PUT",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions/REPLACE_QUESTION_ID",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"questionText\": \"Which keyword declares a block-scoped constant?\", \"type\": \"MCQ\", \"options\": [\"var\", \"let\", \"const\"], \"correctAnswer\": \"const\"}"
+            {
+              "name": "Create Assessment (admin)",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/api/assessments",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"skillId\": \"REPLACE_SKILL_ID\", \"title\": \"Node.js Basics\", \"description\": \"Core Node.js concepts.\", \"difficulty\": \"Beginner\", \"type\": \"Multiple Choice\", \"durationMinutes\": 15, \"passingScore\": 70}"
+                },
+                "description": "New assessments are created as Draft (pass status to override). passingScore defaults to 70."
+              }
             },
-            "description": "Only the fields sent are changed. Switching to Short/Long answer clears options and correctAnswer."
-          }
-        },
-        {
-          "name": "Delete Question (admin)",
-          "request": {
-            "method": "DELETE",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions/REPLACE_QUESTION_ID",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "description": "409 for the last question of an Active assessment, or a question candidates have already answered."
-          }
-        },
-        {
-          "name": "Submit Attempt (candidate)",
-          "request": {
-            "method": "POST",
-            "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/attempts",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] },
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"answers\": [{\"questionId\": \"REPLACE_QUESTION_ID\", \"answer\": \"const\"},{\"questionId\": \"REPLACE_SHORT_ANSWER_QUESTION_ID\", \"answer\": \"It lets you run JavaScript outside the browser.\"}], \"timeTakenSeconds\": 420}"
+            {
+              "name": "Update Assessment (admin)",
+              "request": {
+                "method": "PUT",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"status\": \"Active\", \"passingScore\": 60}"
+                },
+                "description": "Only the fields sent are changed. Accepts title, description, skillId, difficulty, type, durationMinutes, passingScore, status (Active | Draft | Inactive)."
+              }
             },
-            "description": "Only MCQ questions are scored; Short/Long answers are saved but not graded. Pass/fail uses the assessment's passingScore."
-          }
+            {
+              "name": "Duplicate Assessment (admin)",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/duplicate",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "description": "Copies the assessment and its questions as a Draft titled \"… (copy)\"."
+              }
+            },
+            {
+              "name": "Delete Assessment (admin)",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "description": "409 if any candidate has attempted it; otherwise deletes it and its questions."
+              }
+            }
+          ]
         },
         {
-          "name": "My Attempts (candidate)",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/assessments/attempts/me",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
-          }
+          "name": "Assessment Questions",
+          "item": [
+            {
+              "name": "Add Question (admin)",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"questionText\": \"What keyword declares a constant in JS?\", \"type\": \"MCQ\", \"options\": [\"var\", \"let\", \"const\"], \"correctAnswer\": \"const\"}"
+                },
+                "description": "MCQ: options needs at least two non-empty strings and correctAnswer must match one exactly. Questions are added at the end (position = max + 1)."
+              }
+            },
+            {
+              "name": "Add Short Answer Question (admin)",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"questionText\": \"In one sentence, what is Node.js?\", \"type\": \"Short answer\"}"
+                },
+                "description": "Short answer / Long answer questions take no options or correctAnswer."
+              }
+            },
+            {
+              "name": "Update Question (admin)",
+              "request": {
+                "method": "PUT",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions/REPLACE_QUESTION_ID",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"questionText\": \"Which keyword declares a block-scoped constant?\", \"type\": \"MCQ\", \"options\": [\"var\", \"let\", \"const\"], \"correctAnswer\": \"const\"}"
+                },
+                "description": "Only the fields sent are changed. Switching to Short/Long answer clears options and correctAnswer."
+              }
+            },
+            {
+              "name": "Delete Question (admin)",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/questions/REPLACE_QUESTION_ID",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
+                "description": "409 for the last question of an Active assessment, or a question candidates have already answered."
+              }
+            }
+          ]
         },
         {
-          "name": "Get Attempt by Id (candidate)",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/api/assessments/attempts/REPLACE_ATTEMPT_ID",
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] },
-            "description": "Only the candidate who made the attempt can read it (403 otherwise)."
-          }
+          "name": "Assessment Attempts",
+          "item": [
+            {
+              "name": "Submit Attempt (candidate)",
+              "request": {
+                "method": "POST",
+                "url": "{{baseUrl}}/api/assessments/REPLACE_ASSESSMENT_ID/attempts",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] },
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"answers\": [{\"questionId\": \"REPLACE_QUESTION_ID\", \"answer\": \"const\"},{\"questionId\": \"REPLACE_SHORT_ANSWER_QUESTION_ID\", \"answer\": \"It lets you run JavaScript outside the browser.\"}], \"timeTakenSeconds\": 420}"
+                },
+                "description": "Only MCQ questions are scored; Short/Long answers are saved but not graded. Pass/fail uses the assessment's passingScore."
+              }
+            },
+            {
+              "name": "My Attempts (candidate)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/assessments/attempts/me",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] }
+              }
+            },
+            {
+              "name": "Get Attempt by Id (candidate)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/assessments/attempts/REPLACE_ATTEMPT_ID",
+                "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{candidateToken}}" }] },
+                "description": "Only the candidate who made the attempt can read it (403 otherwise)."
+              }
+            }
+          ]
         }
       ]
     },
@@ -582,7 +639,7 @@
             "method": "POST",
             "url": "{{baseUrl}}/api/admin/users/REPLACE_USER_ID/reset-password",
             "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{adminToken}}" }] },
-            "description": "Sets a random temporary password and returns it as { tempPassword }. There's no email service, so the admin passes it on."
+            "description": "Warning: this really changes the target user's password; they can only log in with the returned tempPassword afterwards.\n\nSets a random temporary password and returns it as { tempPassword }. There's no email service, so the admin passes it on."
           }
         },
         {
