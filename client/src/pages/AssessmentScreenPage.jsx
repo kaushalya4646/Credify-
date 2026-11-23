@@ -244,9 +244,20 @@ export default function AssessmentScreenPage() {
                   )
                 })}
               </div>
+            ) : question.type === 'Long answer' ? (
+              // Long answers get room for several paragraphs.
+              <textarea
+                key={question.id}
+                value={answers[question.id] || ''}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Type your answer"
+                rows={8}
+                className="w-full px-5 py-4 rounded-xl border border-slate-300 text-sm leading-relaxed resize-y"
+              />
             ) : (
-              // Questions without options are free-text answers.
+              // Short answers (and any question without options) stay single-line.
               <input
+                key={question.id}
                 value={answers[question.id] || ''}
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder="Type your answer"

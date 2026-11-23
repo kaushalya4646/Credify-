@@ -77,10 +77,13 @@ async function getAssessmentById(req, res) {
       include: {
         skill: true,
         questions: {
+          // Explicit order; id breaks ties so the order is always the same.
+          orderBy: [{ position: "asc" }, { id: "asc" }],
           select: {
             id: true,
             questionText: true,
             type: true,
+            position: true,
             options: true,
             // Only admins (the question editor) get the answer key.
             correctAnswer: req.user.role === "ADMIN",
@@ -207,8 +210,17 @@ async function addQuestion(req, res) {
       return res.status(400).json({ error });
     }
 
+    // New questions go to the end of the list.
+    const { _max } = await prisma.assessmentQuestion.aggregate({
+      where: { assessmentId: id },
+      _max: { position: true },
+    });
     const question = await prisma.assessmentQuestion.create({
-      data: { assessmentId: id, ...questionData(q) },
+      data: {
+        assessmentId: id,
+        ...questionData(q),
+        position: (_max.position ?? 0) + 1,
+      },
     });
 
     res.status(201).json(question);
@@ -553,14 +565,15 @@ async function duplicateAssessment(req, res) {
     const { id } = req.params;
     const original = await prisma.assessment.findUnique({
       where: { id },
-      include: { questions: true },
+      include: { questions: { orderBy: [{ position: "asc" }, { id: "asc" }] } },
     });
 
     if (!original) {
       return res.status(404).json({ error: "Assessment not found." });
     }
 
-    // The copy and all its questions are created together in one write.
+    // The copy and all its questions are created together in one write,
+    // keeping the original order.
     const copy = await prisma.assessment.create({
       data: {
         title: `${original.title} (copy)`,
@@ -572,9 +585,10 @@ async function duplicateAssessment(req, res) {
         passingScore: original.passingScore,
         status: "Draft",
         questions: {
-          create: original.questions.map((q) => ({
+          create: original.questions.map((q, i) => ({
             questionText: q.questionText,
             type: q.type,
+            position: i + 1,
             // Prisma rejects a plain null for a Json field; leaving it out stores null.
             options: q.options ?? undefined,
             correctAnswer: q.correctAnswer,

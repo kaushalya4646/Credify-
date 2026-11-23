@@ -134,6 +134,7 @@ model AssessmentQuestion {
   type           String     @default("MCQ") // "MCQ" | "Short answer" | "Long answer"
   options        Json?      // MCQ only: array of option text strings
   correctAnswer  String?    // MCQ only: must equal one of the options
+  position       Int        @default(0) // display order within the assessment
   answers        AttemptAnswer[]
 }
 
