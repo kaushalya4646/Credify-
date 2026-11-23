@@ -4,7 +4,10 @@ async function getAssessments(req, res) {
   try {
     const assessments = await prisma.assessment.findMany({
       orderBy: { createdAt: "desc" },
-      include: { skill: true },
+      include: {
+        skill: true,
+        _count: { select: { questions: true } },
+      },
     });
     res.json(assessments);
   } catch (err) {
@@ -214,8 +217,7 @@ async function getAttemptById(req, res) {
       return res.status(404).json({ error: "Attempt not found." });
     }
 
-    const isOwner = attempt.userId === req.user.userId;
-    if (!isOwner && req.user.role !== "ADMIN") {
+    if (attempt.userId !== req.user.userId) {
       return res
         .status(403)
         .json({ error: "You don't have permission to view this attempt." });
