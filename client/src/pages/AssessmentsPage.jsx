@@ -470,20 +470,35 @@ export default function AssessmentsPage() {
                   ))}
                 </div>
 
-                <button
-                  onClick={() =>
-                    a.action === "View results"
-                      ? setActiveResult(a)
-                      : navigate(`/candidate/assessments/${a.id}/screen`)
-                  }
-                  className={`mt-5 min-h-12 w-full rounded-lg text-sm font-semibold ${
-                    a.action === "View results"
-                      ? "border border-primary text-primary hover:bg-blue-50"
-                      : "bg-primary text-white hover:bg-primary-dark"
-                  }`}
-                >
-                  {a.action}
-                </button>
+                {a.action === "View results" ? (
+                  // Completed: view the latest result, or take it again
+                  // through the same screen as a first attempt.
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => setActiveResult(a)}
+                      className="min-h-12 rounded-lg border border-primary text-sm font-semibold text-primary hover:bg-blue-50"
+                    >
+                      View results
+                    </button>
+                    <button
+                      onClick={() =>
+                        navigate(`/candidate/assessments/${a.id}/screen`)
+                      }
+                      className="min-h-12 rounded-lg bg-primary text-sm font-semibold text-white hover:bg-primary-dark"
+                    >
+                      Retake
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() =>
+                      navigate(`/candidate/assessments/${a.id}/screen`)
+                    }
+                    className="mt-5 min-h-12 w-full rounded-lg bg-primary text-sm font-semibold text-white hover:bg-primary-dark"
+                  >
+                    {a.action}
+                  </button>
+                )}
               </div>
             ))}
             {loading && (
