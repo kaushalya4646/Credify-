@@ -1,7 +1,8 @@
 // CandidateProfileRecruiterViewPage.jsx
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import LogoutLink from "../components/LogoutLink";
+import { api } from '../api/client'
 
 const navItems = [
   { label: 'Dashboard', path: '/recruiter/dashboard' },
@@ -51,36 +52,68 @@ function RecruiterSidebar() {
   )
 }
 
+// pct may be null (e.g. no target role) — then show a muted, empty ring with "—".
 function ScoreRing({ pct, color = '#16a34a', size = 56 }) {
   const r = (size - 10) / 2
   const circumference = 2 * Math.PI * r
+  const hasValue = pct != null
   return (
-    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+    <div className="relative mx-auto flex items-center justify-center" style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} className="-rotate-90" width={size} height={size}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e5e9f0" strokeWidth="7" />
-        <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
-          strokeDasharray={`${circumference * (pct / 100)} ${circumference}`}
-        />
+        {/* Skip the arc at 0% — a round line cap would still draw a dot. */}
+        {hasValue && pct > 0 && (
+          <circle
+            cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+            strokeDasharray={`${circumference * (pct / 100)} ${circumference}`}
+          />
+        )}
       </svg>
-      <span className="absolute text-sm font-bold text-slate-900">{pct}%</span>
+      <span
+        className={`absolute font-bold ${size < 64 ? 'text-[11px]' : 'text-sm'} ${hasValue ? 'text-slate-900' : 'text-slate-400'}`}
+      >
+        {hasValue ? `${pct}%` : '—'}
+      </span>
     </div>
   )
 }
 
-const verifiedSkills = [
-  { name: 'Java', level: 'Intermediate', score: 40 },
-  { name: 'Spring Boot', level: 'Intermediate', score: 90 },
-  { name: 'SQL', level: 'Elementary', score: 70 },
-  { name: 'REST APIs', level: 'Intermediate', score: 75 },
-]
+function initials(name = '') {
+  return name.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+}
 
-const assessmentResults = [
-  { name: 'Java assessment', date: '04/09/2023', score: 95 },
-  { name: 'SQL assessment', date: '04/01/2023', score: 75 },
-]
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString() : ''
+}
+
+// Project links are free text; make sure they open as absolute URLs.
+function toHref(link) {
+  return /^https?:\/\//i.test(link) ? link : `https://${link}`
+}
 
 export default function CandidateProfileRecruiterViewPage() {
+  const { id } = useParams()
+  const [profile, setProfile] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      setError('')
+      try {
+        setProfile(await api.get(`/api/recruiter/candidates/${id}`))
+      } catch (err) {
+        console.error('Failed to load candidate profile:', err)
+        setError(err.message || 'Could not load this candidate.')
+        setProfile(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [id])
+
   const [openMenu, setOpenMenu] = useState(null) // 'help' | 'notifications' | 'profile' | null
   const menuRef = useRef(null)
 
@@ -187,134 +220,200 @@ export default function CandidateProfileRecruiterViewPage() {
         </header>
 
         <main className="p-10 space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-8 flex items-start justify-between">
-            <div className="flex items-center gap-5">
-              <div className="w-24 h-24 rounded-full bg-blue-50 flex items-center justify-center text-3xl font-semibold text-primary">CS</div>
-              <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h2 className="text-2xl font-semibold text-slate-900">Chethina Sri</h2>
-                  <span className="px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">✓ Verified Profile</span>
-                </div>
-                <p className="text-slate-500 mb-3">Backend Developer</p>
-                <div className="flex gap-3">
-                  <button className="px-5 py-2 rounded-xl bg-blue-50 border border-blue-100 text-primary text-sm font-semibold">Save candidate</button>
-                  <button className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">Contact candidate</button>
-                </div>
-              </div>
+          {loading && <p className="py-10 text-center text-sm text-slate-500">Loading candidate…</p>}
+
+          {!loading && error && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
+              <p className="font-semibold text-slate-900">{error}</p>
+              <Link to="/recruiter/find-candidates" className="mt-3 inline-block text-sm font-semibold text-primary hover:underline">
+                Back to Find Candidates
+              </Link>
             </div>
-            <div className="text-center">
-              <ScoreRing pct={92} size={88} />
-              <p className="text-xs text-slate-500 mt-2">Match score</p>
-            </div>
-          </div>
+          )}
 
-          <div className="grid grid-cols-3 gap-6">
-            <div className="col-span-2 space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
-                <h3 className="font-medium text-slate-900">Professional summary</h3>
-                <p className="text-sm text-slate-700">Chethina Sri is a professional developer focused on commercial automation and backend development.</p>
+          {!loading && !error && profile && (() => {
+            const verifiedSkills = profile.user.skillVerifications.filter((v) => v.status === 'Verified')
+            const results = profile.assessmentResults || []
+            const technicalSkills = (profile.technicalSkills || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+            const careerInterests = profile.careerInterests?.trim()
+            const education = profile.education?.trim()
+            const projects = profile.projects || []
+            const certifications = profile.certifications || []
 
-                <div className="border-t border-slate-100 pt-5">
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Career interests</h4>
-                  <span className="inline-block px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium">
-                    Software Architecture and Cloud Computing
-                  </span>
-                </div>
-
-                <div className="border-t border-slate-100 pt-5">
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Technical skills</h4>
-                  <div className="flex gap-2 flex-wrap">
-                    {['NoSQL', 'Docker', 'Kubernetes'].map((s) => (
-                      <span key={s} className="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium">{s}</span>
-                    ))}
+            return (
+              <>
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 flex items-start justify-between">
+                  <div className="flex items-center gap-5">
+                    <div className="w-24 h-24 rounded-full bg-blue-50 flex items-center justify-center text-3xl font-semibold text-primary">
+                      {initials(profile.user.name)}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <h2 className="text-2xl font-semibold text-slate-900">{profile.user.name}</h2>
+                        {verifiedSkills.length > 0 && (
+                          <span className="px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">✓ Verified Profile</span>
+                        )}
+                      </div>
+                      <p className="text-slate-500 mb-3">{profile.targetCareerRole?.name || 'No target role selected'}</p>
+                      <div className="flex gap-3">
+                        <button className="px-5 py-2 rounded-xl bg-blue-50 border border-blue-100 text-primary text-sm font-semibold">Save candidate</button>
+                        <button className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">Contact candidate</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-center">
+                    <ScoreRing pct={profile.match} size={88} />
+                    <p className="text-xs text-slate-500 mt-2">Match score</p>
+                    {profile.match == null && (
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {profile.targetCareerRole ? 'Role has no required skills' : 'No target role selected'}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="border-t border-slate-100 pt-5">
-                  <h4 className="text-sm font-semibold text-slate-900 mb-2">Education</h4>
-                  <p className="text-sm font-medium text-slate-900">University of Colombo</p>
-                </div>
-              </div>
+                <div className="grid grid-cols-3 gap-6">
+                  <div className="col-span-2 space-y-6">
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
+                      <h3 className="font-medium text-slate-900">Professional summary</h3>
+                      {profile.bio?.trim() ? (
+                        <p className="text-sm text-slate-700 whitespace-pre-line">{profile.bio}</p>
+                      ) : (
+                        <p className="text-sm text-slate-400">No summary provided.</p>
+                      )}
 
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <h3 className="font-medium text-slate-900 mb-4">Projects</h3>
-                <div className="space-y-4">
-                  {[
-                    { name: 'Inventory Management API', link: 'github.com/github' },
-                    { name: 'File Sharing System', link: 'github.com/github' },
-                  ].map((proj) => (
-                    <div key={proj.name} className="flex items-center gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
-                      <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-slate-700">🔗</div>
-                      <div>
-                        <p className="font-semibold text-slate-900 text-sm">{proj.name}</p>
-                        <p className="text-xs text-primary font-medium">{proj.link}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <h3 className="font-medium text-slate-900 mb-4">Certifications</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {['Google Java Programming', 'Java Site'].map((cert) => (
-                    <div key={cert} className="flex items-center gap-3 bg-slate-50 rounded-xl p-4">
-                      <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary">🎓</div>
-                      <div>
-                        <p className="font-semibold text-slate-900 text-sm">{cert}</p>
-                        <p className="text-xs text-slate-500">Certification</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <h3 className="font-medium text-slate-900 mb-1">Verified skills</h3>
-                <p className="text-xs text-slate-500 mb-4">Confirmed through Credify assessments.</p>
-                <div className="space-y-5">
-                  {verifiedSkills.map((skill) => (
-                    <div key={skill.name}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div>
-                          <p className="font-semibold text-slate-900 text-sm">{skill.name}</p>
-                          <p className="text-xs text-slate-500">{skill.level}</p>
+                      {careerInterests && (
+                        <div className="border-t border-slate-100 pt-5">
+                          <h4 className="text-sm font-semibold text-slate-900 mb-2">Career interests</h4>
+                          <span className="inline-block px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium">
+                            {careerInterests}
+                          </span>
                         </div>
-                        <span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">✓ Verified</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-slate-100">
-                        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${skill.score}%` }} />
-                      </div>
-                      <div className="flex justify-between text-xs text-slate-500 mt-1">
-                        <span>Assessment score</span><span className="font-semibold text-slate-900">{skill.score}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                      )}
 
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <h3 className="font-medium text-slate-900 mb-4">Assessment results</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {assessmentResults.map((result) => (
-                    <div key={result.name} className="border border-slate-200 rounded-xl p-4 text-center">
-                      <p className="text-sm font-semibold text-slate-900 mb-1">{result.name}</p>
-                      <p className="text-xs text-slate-500 mb-3">{result.date}</p>
-                      <ScoreRing pct={result.score} size={52} />
-                      <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">✓ Verified</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                      {technicalSkills.length > 0 && (
+                        <div className="border-t border-slate-100 pt-5">
+                          <h4 className="text-sm font-semibold text-slate-900 mb-1">Technical skills</h4>
+                          <p className="text-xs text-slate-500 mb-2">Self-reported, not verified by Credify.</p>
+                          <div className="flex gap-2 flex-wrap">
+                            {technicalSkills.map((s) => (
+                              <span key={s} className="px-3 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-primary text-xs font-medium">{s}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-              <div className="bg-green-50 rounded-2xl p-6">
-                <h3 className="font-semibold text-green-800 mb-2">✓ Verified profile</h3>
-                <p className="text-sm text-green-800">4 skills and 2 assessment results are verified.</p>
-              </div>
-            </div>
-          </div>
+                      {education && (
+                        <div className="border-t border-slate-100 pt-5">
+                          <h4 className="text-sm font-semibold text-slate-900 mb-2">Education</h4>
+                          <p className="text-sm font-medium text-slate-900">{education}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {projects.length > 0 && (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                        <h3 className="font-medium text-slate-900 mb-4">Projects</h3>
+                        <div className="space-y-4">
+                          {projects.map((proj) => (
+                            <div key={proj.id} className="flex items-center gap-3 border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+                              <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center text-slate-700">🔗</div>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-slate-900 text-sm">{proj.name}</p>
+                                {proj.link && (
+                                  <a
+                                    href={toHref(proj.link)}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block truncate text-xs text-primary font-medium hover:underline"
+                                  >
+                                    {proj.link}
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {certifications.length > 0 && (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                        <h3 className="font-medium text-slate-900 mb-4">Certifications</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                          {certifications.map((cert) => (
+                            <div key={cert.id} className="flex items-center gap-3 bg-slate-50 rounded-xl p-4">
+                              <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary">🎓</div>
+                              <div>
+                                <p className="font-semibold text-slate-900 text-sm">{cert.name}</p>
+                                <p className="text-xs text-slate-500">Certification</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                      <h3 className="font-medium text-slate-900 mb-1">Verified skills</h3>
+                      <p className="text-xs text-slate-500 mb-4">Confirmed through Credify assessments.</p>
+                      {verifiedSkills.length > 0 ? (
+                        <div className="space-y-4">
+                          {verifiedSkills.map((v) => (
+                            <div key={v.id} className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-slate-900 text-sm">{v.skill.name}</p>
+                                <p className="text-xs text-slate-500">
+                                  {[v.skill.category, v.verifiedAt && `Verified ${formatDate(v.verifiedAt)}`]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </p>
+                              </div>
+                              <span className="shrink-0 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">✓ Verified</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-400">No verified skills yet.</p>
+                      )}
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                      <h3 className="font-medium text-slate-900 mb-4">Assessment results</h3>
+                      {results.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-4">
+                          {results.map((result, i) => (
+                            <div key={`${result.skillName}-${result.completedAt}-${i}`} className="border border-slate-200 rounded-xl p-4 text-center">
+                              <p className="text-sm font-semibold text-slate-900 mb-1">{result.skillName}</p>
+                              <p className="text-xs text-slate-500 mb-3">{formatDate(result.completedAt)}</p>
+                              <ScoreRing pct={result.score} size={52} />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-slate-400">No completed assessments yet.</p>
+                      )}
+                    </div>
+
+                    {(verifiedSkills.length > 0 || results.length > 0) && (
+                      <div className="bg-green-50 rounded-2xl p-6">
+                        <h3 className="font-semibold text-green-800 mb-2">✓ Verified profile</h3>
+                        <p className="text-sm text-green-800">
+                          {verifiedSkills.length} verified skill{verifiedSkills.length === 1 ? '' : 's'} and{' '}
+                          {results.length} completed assessment{results.length === 1 ? '' : 's'}.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )
+          })()}
         </main>
       </div>
     </div>

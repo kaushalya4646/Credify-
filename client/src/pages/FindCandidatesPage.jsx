@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/recruiter/dashboard" },
@@ -98,64 +99,159 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+// Each filter maps to a query param on GET /api/recruiter/candidates.
 const filters = [
-  "Career role",
-  "Technical skills",
-  "Verified skills",
-  "Experience",
-  "Assessment score",
-  "Education",
+  { label: "Career role", param: "careerRoleId" },
+  { label: "Verified skills", param: "skillId" },
 ];
 
-const verifiedSkills = [
-  { name: "Java", pct: 40 },
-  { name: "Spring Boot", pct: 90 },
-  { name: "SQL", pct: 70 },
-  { name: "REST APIs", pct: 75 },
-];
+function initials(name = "") {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
 
-const candidateId = "1"; // TODO: replace with the real candidate's id once this page uses live data
+// Highest match first; candidates with no match (null) go last.
+function sortByMatch(list) {
+  return [...list].sort((a, b) => {
+    if (a.match == null && b.match == null) return 0;
+    if (a.match == null) return 1;
+    if (b.match == null) return -1;
+    return b.match - a.match;
+  });
+}
 
-// TODO (backend step): replace with real candidates matching the recruiter's filters/search.
-const otherCandidates = [
-  {
-    id: "2",
-    name: "Raveen Caldera",
-    role: "DevOps Engineer",
-    match: 88,
-    skills: ["Docker", "CI/CD", "AWS"],
-    experience: "3 years",
-  },
-  {
-    id: "3",
-    name: "Amara Perera",
-    role: "Frontend Engineer",
-    match: 91,
-    skills: ["React", "CSS", "TypeScript"],
-    experience: "2 years",
-  },
-  {
-    id: "4",
-    name: "Nadun Fernando",
-    role: "Backend Developer",
-    match: 85,
-    skills: ["Java", "Spring Boot", "SQL"],
-    experience: "4 years",
-  },
-  {
-    id: "5",
-    name: "Ishara Wickrama",
-    role: "Full Stack Developer",
-    match: 79,
-    skills: ["Node.js", "React", "MongoDB"],
-    experience: "2 years",
-  },
-];
+function formatMatch(match) {
+  return match == null ? "—" : `${match}%`;
+}
+
+function MatchRing({ match }) {
+  const r = 38;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="relative w-20 h-20 flex items-center justify-center">
+      <svg viewBox="0 0 100 100" className="w-20 h-20 -rotate-90">
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          stroke="#e5e9f0"
+          strokeWidth="9"
+        />
+        {/* Skip the arc at 0% — a round line cap would still draw a dot. */}
+        {match != null && match > 0 && (
+          <circle
+            cx="50"
+            cy="50"
+            r={r}
+            fill="none"
+            stroke="#16a34a"
+            strokeWidth="9"
+            strokeLinecap="round"
+            strokeDasharray={`${c * (match / 100)} ${c}`}
+          />
+        )}
+      </svg>
+      <span
+        className={`absolute text-lg font-bold ${match == null ? "text-slate-400" : "text-slate-900"}`}
+      >
+        {formatMatch(match)}
+      </span>
+    </div>
+  );
+}
 
 export default function FindCandidatesPage() {
   const [searchText, setSearchText] = useState("");
-  const [activeFilter, setActiveFilter] = useState("Career role");
   const [exploreOpen, setExploreOpen] = useState(false);
+
+  // Filter options + current selections ({ careerRoleId, skillId }).
+  const [careerRoles, setCareerRoles] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [selected, setSelected] = useState({ careerRoleId: "", skillId: "" });
+  const [openFilter, setOpenFilter] = useState(null);
+  const filterRef = useRef(null);
+
+  const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const latestRequest = useRef(0);
+
+  async function runSearch(text, sel) {
+    const params = new URLSearchParams();
+    if (text.trim()) params.set("q", text.trim());
+    if (sel.careerRoleId) params.set("careerRoleId", sel.careerRoleId);
+    if (sel.skillId) params.set("skillId", sel.skillId);
+    const qs = params.toString();
+
+    // Ignore responses from older searches that finish after a newer one.
+    const requestId = ++latestRequest.current;
+    setLoading(true);
+    setError("");
+    try {
+      const data = await api.get(
+        `/api/recruiter/candidates${qs ? `?${qs}` : ""}`,
+      );
+      if (requestId === latestRequest.current) {
+        setCandidates(sortByMatch(data || []));
+      }
+    } catch (err) {
+      console.error("Candidate search failed:", err);
+      if (requestId === latestRequest.current) {
+        setError(err.message || "Could not search candidates.");
+        setCandidates([]);
+      }
+    } finally {
+      if (requestId === latestRequest.current) setLoading(false);
+    }
+  }
+
+  // Load filter options and an initial, unfiltered search.
+  useEffect(() => {
+    api
+      .get("/api/career-roles")
+      .then((data) => setCareerRoles(data || []))
+      .catch((err) => console.error("Failed to load career roles:", err));
+    api
+      .get("/api/skills")
+      .then((data) => setSkills(data || []))
+      .catch((err) => console.error("Failed to load skills:", err));
+    runSearch("", { careerRoleId: "", skillId: "" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (filterRef.current && !filterRef.current.contains(e.target)) {
+        setOpenFilter(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function chooseFilter(param, value) {
+    const next = { ...selected, [param]: value };
+    setSelected(next);
+    setOpenFilter(null);
+    runSearch(searchText, next);
+  }
+
+  function optionsFor(param) {
+    return param === "careerRoleId" ? careerRoles : skills;
+  }
+
+  function selectedName(param) {
+    const id = selected[param];
+    return id ? optionsFor(param).find((o) => o.id === id)?.name : null;
+  }
+
+  const [bestMatch, ...otherCandidates] = candidates;
 
   // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -353,147 +449,179 @@ export default function FindCandidatesPage() {
         </header>
 
         <main className="p-10">
-          <div className="flex gap-3 mb-5">
+          <form
+            className="flex gap-3 mb-5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              runSearch(searchText, selected);
+            }}
+          >
             <input
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              placeholder="Search by skills, role or keywords…"
+              placeholder="Search by name, role or verified skill…"
               className="flex-1 px-5 py-3 rounded-xl border border-slate-300 text-sm"
             />
-            <button className="px-8 py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark">
+            <button
+              type="submit"
+              className="px-8 py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark"
+            >
               Search
             </button>
-          </div>
+          </form>
 
-          <div className="flex flex-wrap gap-3 mb-6">
-            {filters.map((f) => (
-              <button
-                key={f}
-                onClick={() => setActiveFilter(f)}
-                className={`px-4 py-2 rounded-full text-sm font-medium border ${
-                  activeFilter === f
-                    ? "bg-blue-50 border-primary text-primary"
-                    : "bg-white border-slate-300 text-slate-700"
-                }`}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-8">
-            <div className="flex items-start justify-between mb-6">
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center text-2xl font-semibold text-primary">
-                  CS
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-semibold text-slate-900">
-                      Chethina Sri
-                    </h2>
-                    <span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                      ✓ Verified
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-500">Backend Developer</p>
-                </div>
-              </div>
-              <div className="text-center">
-                <div className="relative w-20 h-20 flex items-center justify-center">
-                  <svg viewBox="0 0 100 100" className="w-20 h-20 -rotate-90">
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="38"
-                      fill="none"
-                      stroke="#e5e9f0"
-                      strokeWidth="9"
-                    />
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="38"
-                      fill="none"
-                      stroke="#16a34a"
-                      strokeWidth="9"
-                      strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 38 * 0.92} ${2 * Math.PI * 38}`}
-                    />
-                  </svg>
-                  <span className="absolute text-lg font-bold text-slate-900">
-                    92%
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 mt-1">Match</p>
-              </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-6 mb-6">
-              <h3 className="font-semibold text-slate-900 mb-4">
-                Verified skills
-              </h3>
-              <div className="grid grid-cols-2 gap-6">
-                {verifiedSkills.map((skill) => (
-                  <div key={skill.name} className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-green-50 border border-green-200 flex items-center justify-center text-green-700 font-bold text-xs">
-                      {skill.name[0]}
+          <div className="flex flex-wrap gap-3 mb-6" ref={filterRef}>
+            {filters.map((f) => {
+              const value = selectedName(f.param);
+              const options = optionsFor(f.param);
+              return (
+                <div key={f.param} className="relative">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenFilter((o) => (o === f.param ? null : f.param))
+                    }
+                    className={`px-4 py-2 rounded-full text-sm font-medium border ${
+                      value
+                        ? "bg-blue-50 border-primary text-primary"
+                        : "bg-white border-slate-300 text-slate-700"
+                    }`}
+                  >
+                    {value ? `${f.label}: ${value}` : f.label} ▾
+                  </button>
+                  {openFilter === f.param && (
+                    <div className="absolute left-0 top-full z-20 mt-2 max-h-64 w-60 overflow-y-auto rounded-xl border border-slate-200 bg-white py-2 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => chooseFilter(f.param, "")}
+                        className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                          !selected[f.param]
+                            ? "font-semibold text-primary"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        Any
+                      </button>
+                      {options.map((o) => (
+                        <button
+                          key={o.id}
+                          type="button"
+                          onClick={() => chooseFilter(f.param, o.id)}
+                          className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                            selected[f.param] === o.id
+                              ? "font-semibold text-primary"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          {o.name}
+                        </button>
+                      ))}
+                      {options.length === 0 && (
+                        <p className="px-4 py-2 text-sm text-slate-400">
+                          No options available
+                        </p>
+                      )}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex justify-between text-sm font-semibold text-slate-900 mb-1">
-                        <span>{skill.name}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {loading && (
+            <p className="py-10 text-center text-sm text-slate-500">
+              Searching candidates…
+            </p>
+          )}
+
+          {!loading && error && (
+            <p className="py-10 text-center text-sm text-red-600">{error}</p>
+          )}
+
+          {!loading && !error && !bestMatch && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center">
+              <p className="font-semibold text-slate-900">
+                No candidates found
+              </p>
+              <p className="text-sm text-slate-500 mt-1">
+                Try a different search or clear your filters.
+              </p>
+            </div>
+          )}
+
+          {!loading && !error && bestMatch && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-8">
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center text-2xl font-semibold text-primary">
+                    {initials(bestMatch.user.name)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-semibold text-slate-900">
+                        {bestMatch.user.name}
+                      </h2>
+                      {bestMatch.verifiedSkills.length > 0 && (
+                        <span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                          ✓ Verified
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-500">
+                      {bestMatch.targetCareerRole?.name ||
+                        "No target role selected"}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <MatchRing match={bestMatch.match} />
+                  <p className="text-xs text-slate-500 mt-1">Match</p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-100 pt-6 mb-6">
+                <h3 className="font-semibold text-slate-900 mb-4">
+                  Verified skills
+                </h3>
+                {bestMatch.verifiedSkills.length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {bestMatch.verifiedSkills.map((name) => (
+                      <div
+                        key={name}
+                        className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2"
+                      >
+                        <span className="text-sm font-semibold text-slate-900">
+                          {name}
+                        </span>
                         <span className="text-green-700">✓</span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-slate-100">
-                        <div
-                          className="h-1.5 rounded-full bg-green-600"
-                          style={{ width: `${skill.pct}%` }}
-                        />
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No verified skills yet.
+                  </p>
+                )}
               </div>
-            </div>
 
-            <div className="border-t border-slate-100 pt-6 mb-6">
-              <div className="inline-flex items-center gap-3 px-4 py-3 rounded-xl border border-slate-200">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#2563eb"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+              <div className="flex gap-4">
+                <Link
+                  to={`/recruiter/candidates/${bestMatch.user.id}`}
+                  className="flex-1 py-3.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark text-center"
+                >
+                  View full profile
+                </Link>
+                {otherCandidates.length > 0 && (
+                  <button
+                    onClick={() => setExploreOpen(true)}
+                    className="flex-1 py-3.5 rounded-xl bg-blue-50 border border-blue-100 text-primary font-semibold text-sm"
                   >
-                    <rect x="3" y="8" width="18" height="12" rx="2.5" />
-                    <path d="M9 8V5.5h6V8" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-semibold text-slate-900">2 years</p>
-                  <p className="text-xs text-slate-500">Experience</p>
-                </div>
+                    Explore other candidates ({otherCandidates.length})
+                  </button>
+                )}
               </div>
             </div>
-            <div className="flex gap-4">
-              <Link
-                to={`/recruiter/candidates/${candidateId}`}
-                className="flex-1 py-3.5 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark text-center"
-              >
-                View full profile
-              </Link>
-              <button
-                onClick={() => setExploreOpen(true)}
-                className="flex-1 py-3.5 rounded-xl bg-blue-50 border border-blue-100 text-primary font-semibold text-sm"
-              >
-                Explore other candidates
-              </button>
-            </div>
-          </div>
+          )}
         </main>
       </div>
 
@@ -515,20 +643,17 @@ export default function FindCandidatesPage() {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-12 h-12 shrink-0 rounded-full bg-blue-50 flex items-center justify-center font-semibold text-primary">
-                    {c.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
+                    {initials(c.user.name)}
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-900 truncate">
-                      {c.name}
+                      {c.user.name}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {c.role} · {c.experience}
+                      {c.targetCareerRole?.name || "No target role selected"}
                     </p>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {c.skills.map((s) => (
+                      {c.verifiedSkills.map((s) => (
                         <span
                           key={s}
                           className="px-2 py-0.5 rounded-full bg-slate-100 text-[11px] font-medium text-slate-600"
@@ -536,16 +661,25 @@ export default function FindCandidatesPage() {
                           {s}
                         </span>
                       ))}
+                      {c.verifiedSkills.length === 0 && (
+                        <span className="text-[11px] text-slate-400">
+                          No verified skills yet
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
                   <div className="text-center">
-                    <p className="font-bold text-green-700">{c.match}%</p>
+                    <p
+                      className={`font-bold ${c.match == null ? "text-slate-400" : "text-green-700"}`}
+                    >
+                      {formatMatch(c.match)}
+                    </p>
                     <p className="text-[11px] text-slate-500">Match</p>
                   </div>
                   <Link
-                    to={`/recruiter/candidates/${c.id}`}
+                    to={`/recruiter/candidates/${c.user.id}`}
                     onClick={() => setExploreOpen(false)}
                     className="px-4 py-2 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-dark whitespace-nowrap"
                   >
