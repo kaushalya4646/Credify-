@@ -60,7 +60,7 @@ async function login(req, res) {
 
     // Checked after the password so this doesn't reveal which emails exist.
     if (!user.isActive) {
-      return res.status(403).json({ error: "This account has been suspended. Contact an administrator." });
+      return res.status(403).json({ error: "This account has been suspended. Contact an administrator.", code: "ACCOUNT_SUSPENDED" });
     }
 
     const token = jwt.sign(

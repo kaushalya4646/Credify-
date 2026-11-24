@@ -28,7 +28,7 @@ async function requireAuth(req, res, next) {
       return res.status(401).json({ error: "This account no longer exists." });
     }
     if (!user.isActive) {
-      return res.status(403).json({ error: "This account has been suspended. Contact an administrator." });
+      return res.status(403).json({ error: "This account has been suspended. Contact an administrator.", code: "ACCOUNT_SUSPENDED" });
     }
   } catch (err) {
     console.error(err);

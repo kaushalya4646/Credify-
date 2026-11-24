@@ -93,9 +93,20 @@ async function getCareerRoleById(req, res) {
       where: { id },
       include: { skills: { include: { skill: true } } },
     });
-    // Draft/Inactive roles look the same as missing ones to non-admins.
-    if (!role || (req.user.role !== "ADMIN" && role.status !== "Active")) {
+    if (!role) {
       return res.status(404).json({ error: "Career role not found." });
+    }
+    // Draft/Inactive roles look the same as missing ones to non-admins, except a
+    // candidate's own selected role, which they keep even after it's deactivated.
+    if (req.user.role !== "ADMIN" && role.status !== "Active") {
+      const ownSelection =
+        req.user.role === "CANDIDATE" &&
+        (await prisma.candidateProfile.count({
+          where: { userId: req.user.userId, targetCareerRoleId: role.id },
+        })) > 0;
+      if (!ownSelection) {
+        return res.status(404).json({ error: "Career role not found." });
+      }
     }
     res.json({
       id: role.id,
@@ -235,25 +246,29 @@ async function deleteCareerRole(req, res) {
   try {
     const { id } = req.params;
 
-    // One transaction: if the role can't be deleted (e.g. candidates have
-    // selected it), its required-skill links are kept too.
-    await prisma.$transaction([
-      prisma.careerRoleSkill.deleteMany({ where: { careerRoleId: id } }),
-      prisma.careerRole.delete({ where: { id } }),
-    ]);
+    // The candidate -> role foreign key is ON DELETE SET NULL, so the database
+    // would silently clear candidates' selections. Check explicitly instead,
+    // inside the same transaction as the delete.
+    const result = await prisma.$transaction(async (tx) => {
+      const selectedBy = await tx.candidateProfile.count({ where: { targetCareerRoleId: id } });
+      if (selectedBy > 0) return { selectedBy };
+      await tx.careerRoleSkill.deleteMany({ where: { careerRoleId: id } });
+      await tx.careerRole.delete({ where: { id } });
+      return { deleted: true };
+    });
 
+    if (result.selectedBy) {
+      return res.status(409).json({
+        error:
+          "Cannot delete this role because one or more candidates have selected it as their target career role.",
+      });
+    }
     res.status(204).send();
   } catch (err) {
     if (err.code === "P2025") {
       return res.status(404).json({ error: "Career role not found." });
     }
     console.error(err);
-    if (err.code === "P2003") {
-      return res.status(409).json({
-        error:
-          "Cannot delete this role because one or more candidates have selected it as their target career role.",
-      });
-    }
     res.status(500).json({ error: "Could not delete career role." });
   }
 }

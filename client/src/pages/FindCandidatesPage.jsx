@@ -219,7 +219,8 @@ export default function FindCandidatesPage() {
       .catch((err) => console.error("Failed to load career roles:", err));
     api
       .get("/api/skills")
-      .then((data) => setSkills(data || []))
+      // Only offer Active skills (the API already filters these for recruiters).
+      .then((data) => setSkills((data || []).filter((s) => s.status === "Active")))
       .catch((err) => console.error("Failed to load skills:", err));
     runSearch("", { careerRoleId: "", skillId: "" });
     // eslint-disable-next-line react-hooks/exhaustive-deps

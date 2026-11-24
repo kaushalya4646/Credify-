@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { api } from '../api/client'
+import { api, LOGIN_NOTICE_KEY } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const emailPattern = /^\S+@\S+\.\S+$/
@@ -17,7 +17,16 @@ export default function LoginPage() {
   const [remember, setRemember] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState({})
-  const [submitError, setSubmitError] = useState('')
+  // A forced logout (e.g. suspended account) leaves a one-time notice to show here.
+  const [submitError, setSubmitError] = useState(() => {
+    try {
+      const notice = sessionStorage.getItem(LOGIN_NOTICE_KEY) || ''
+      sessionStorage.removeItem(LOGIN_NOTICE_KEY)
+      return notice
+    } catch {
+      return ''
+    }
+  })
   const [submitting, setSubmitting] = useState(false)
 
   const navigate = useNavigate()

@@ -128,7 +128,10 @@ async function getCandidateProfile(req, res) {
       },
     });
 
-    if (!profile) {
+    // Private profiles are only visible to the candidate themselves or an admin;
+    // everyone else gets the same 404 as a missing profile.
+    const canSeePrivate = req.user.role === "ADMIN" || req.user.userId === id;
+    if (!profile || (profile.visibility === "private" && !canSeePrivate)) {
       return res.status(404).json({ error: "Candidate not found." });
     }
 
