@@ -244,7 +244,6 @@ export default function AdminUsersPage() {
       const updated = await api.put(`/api/admin/users/${editingUser.id}`, {
         name: editingUser.name,
         email: editingUser.email,
-        role: editingUser.role,
       });
       setUsers((prev) =>
         prev.map((u) => (u.id === editingUser.id ? { ...u, ...updated } : u))
@@ -695,17 +694,12 @@ export default function AdminUsersPage() {
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Account type
               </label>
-              <select
-                value={editingUser.role}
-                onChange={(e) =>
-                  setEditingUser((prev) => ({ ...prev, role: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-200 text-sm"
-              >
-                <option value="CANDIDATE">Candidate</option>
-                <option value="RECRUITER">Recruiter</option>
-                <option value="ADMIN">Admin</option>
-              </select>
+              {/* Read-only: each account type needs its own profile, so it can't be switched here. */}
+              <p className="w-full px-4 py-2.5 rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-500">
+                {{ CANDIDATE: "Candidate", RECRUITER: "Recruiter", ADMIN: "Admin" }[editingUser.role] ||
+                  editingUser.role}{" "}
+                (can't be changed)
+              </p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">

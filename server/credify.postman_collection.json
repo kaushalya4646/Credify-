@@ -621,8 +621,9 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\"name\": \"Candidate Test\", \"email\": \"candidate@test.com\", \"role\": \"CANDIDATE\"}"
-            }
+              "raw": "{\"name\": \"Candidate Test\", \"email\": \"candidate@test.com\"}"
+            },
+            "description": "Updates name and/or email. Account type can't be changed: sending a different role returns 400."
           }
         },
         {

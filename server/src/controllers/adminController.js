@@ -71,10 +71,20 @@ async function updateUser(req, res) {
     const { id } = req.params;
     const { name, email, role } = req.body;
 
+    // Account type can't change: each type needs its own profile record.
+    if (role !== undefined) {
+      const current = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+      if (!current) {
+        return res.status(404).json({ error: "User not found." });
+      }
+      if (role !== current.role) {
+        return res.status(400).json({ error: "Account type can't be changed." });
+      }
+    }
+
     const data = {};
     if (name !== undefined) data.name = name;
     if (email !== undefined) data.email = email;
-    if (role !== undefined) data.role = role;
 
     const user = await prisma.user.update({
       where: { id },

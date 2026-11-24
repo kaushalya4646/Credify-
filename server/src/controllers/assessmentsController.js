@@ -92,7 +92,8 @@ async function getAssessmentById(req, res) {
       },
     });
 
-    if (!assessment) {
+    // Draft/Inactive assessments look the same as missing ones to non-admins.
+    if (!assessment || (req.user.role !== "ADMIN" && assessment.status !== "Active")) {
       return res.status(404).json({ error: "Assessment not found." });
     }
 
@@ -365,7 +366,8 @@ async function submitAttempt(req, res) {
       include: { questions: true },
     });
 
-    if (!assessment) {
+    // Only published (Active) assessments accept attempts.
+    if (!assessment || assessment.status !== "Active") {
       return res.status(404).json({ error: "Assessment not found." });
     }
 

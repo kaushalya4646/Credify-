@@ -19,6 +19,13 @@ async function attachSkillsByName(careerRoleId, skillNames) {
   }
 }
 
+// Non-admins only see Active skills in a role's requirements.
+function visibleRoleSkills(req, roleSkills) {
+  return req.user.role === "ADMIN"
+    ? roleSkills
+    : roleSkills.filter((cs) => cs.skill.status === "Active");
+}
+
 async function getCareerRoles(req, res) {
   try {
     const roles = await prisma.careerRole.findMany({
@@ -32,21 +39,28 @@ async function getCareerRoles(req, res) {
     const visibleRoles =
       req.user.role === "ADMIN" ? roles : roles.filter((r) => r.status === "Active");
 
+    const isAdmin = req.user.role === "ADMIN";
     const allSkillIds = [
-      ...new Set(visibleRoles.flatMap((r) => r.skills.map((cs) => cs.skillId))),
+      ...new Set(
+        visibleRoles.flatMap((r) => visibleRoleSkills(req, r.skills).map((cs) => cs.skillId)),
+      ),
     ];
 
     const assessmentCounts = await prisma.assessment.groupBy({
       by: ["skillId"],
       _count: { id: true },
-      where: { skillId: { in: allSkillIds } },
+      where: {
+        skillId: { in: allSkillIds },
+        ...(isAdmin ? {} : { status: "Active" }),
+      },
     });
     const countBySkillId = Object.fromEntries(
       assessmentCounts.map((a) => [a.skillId, a._count.id])
     );
 
     const result = visibleRoles.map((r) => {
-      const roleSkillIds = r.skills.map((cs) => cs.skillId);
+      const roleSkills = visibleRoleSkills(req, r.skills);
+      const roleSkillIds = roleSkills.map((cs) => cs.skillId);
       const assessmentsCount = roleSkillIds.reduce(
         (sum, sid) => sum + (countBySkillId[sid] || 0),
         0
@@ -57,8 +71,8 @@ async function getCareerRoles(req, res) {
         description: r.description,
         category: r.category,
         status: r.status,
-        skillsRequired: r.skills.length,
-        skills: r.skills.map((cs) => cs.skill.name),
+        skillsRequired: roleSkills.length,
+        skills: roleSkills.map((cs) => cs.skill.name),
         candidates: r.candidates.length,
         assessments: assessmentsCount,
         updatedAt: r.updatedAt,
@@ -79,7 +93,8 @@ async function getCareerRoleById(req, res) {
       where: { id },
       include: { skills: { include: { skill: true } } },
     });
-    if (!role) {
+    // Draft/Inactive roles look the same as missing ones to non-admins.
+    if (!role || (req.user.role !== "ADMIN" && role.status !== "Active")) {
       return res.status(404).json({ error: "Career role not found." });
     }
     res.json({
@@ -88,7 +103,7 @@ async function getCareerRoleById(req, res) {
       description: role.description,
       category: role.category,
       status: role.status,
-      requiredSkills: role.skills.map((cs) => ({
+      requiredSkills: visibleRoleSkills(req, role.skills).map((cs) => ({
         skillId: cs.skillId,
         name: cs.skill.name,
         requiredLevel: cs.requiredLevel,
@@ -105,6 +120,11 @@ async function selectCareerRole(req, res) {
     const { careerRoleId } = req.body;
     if (!careerRoleId) {
       return res.status(400).json({ error: "careerRoleId is required." });
+    }
+    // Only Active roles can be selected.
+    const role = await prisma.careerRole.findUnique({ where: { id: careerRoleId } });
+    if (!role || role.status !== "Active") {
+      return res.status(404).json({ error: "Career role not found." });
     }
     const updated = await prisma.candidateProfile.update({
       where: { userId: req.user.userId },
@@ -143,7 +163,7 @@ async function getMySelectedCareerRole(req, res) {
       name: role.name,
       description: role.description,
       category: role.category,
-      requiredSkills: role.skills.map((cs) => ({
+      requiredSkills: visibleRoleSkills(req, role.skills).map((cs) => ({
         skillId: cs.skillId,
         name: cs.skill.name,
         requiredLevel: cs.requiredLevel,

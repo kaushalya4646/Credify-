@@ -1,6 +1,9 @@
 const jwt = require("jsonwebtoken");
+const prisma = require("../lib/prisma");
 
-function requireAuth(req, res, next) {
+// Verifies the token, then checks the account still exists and isn't suspended,
+// so suspending a user also cuts off tokens they were issued before.
+async function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -9,13 +12,31 @@ function requireAuth(req, res, next) {
 
   const token = authHeader.split(" ")[1];
 
+  let decoded;
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = { userId: decoded.userId, role: decoded.role };
-    next();
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch (err) {
     return res.status(401).json({ error: "Invalid or expired token." });
   }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { isActive: true },
+    });
+    if (!user) {
+      return res.status(401).json({ error: "This account no longer exists." });
+    }
+    if (!user.isActive) {
+      return res.status(403).json({ error: "This account has been suspended. Contact an administrator." });
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Could not verify your account." });
+  }
+
+  req.user = { userId: decoded.userId, role: decoded.role };
+  next();
 }
 
 function requireRole(...allowedRoles) {

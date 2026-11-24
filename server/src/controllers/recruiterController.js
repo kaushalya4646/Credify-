@@ -63,7 +63,10 @@ async function searchCandidates(req, res) {
           },
         },
         targetCareerRole: {
-          include: { skills: { select: { skillId: true } } },
+          include: {
+            // Draft/Inactive skills don't count toward the match.
+            skills: { where: { skill: { status: "Active" } }, select: { skillId: true } },
+          },
         },
       },
     });
@@ -115,7 +118,10 @@ async function getCandidateProfile(req, res) {
           },
         },
         targetCareerRole: {
-          include: { skills: { select: { skillId: true } } },
+          include: {
+            // Draft/Inactive skills don't count toward the match.
+            skills: { where: { skill: { status: "Active" } }, select: { skillId: true } },
+          },
         },
         projects: true,
         certifications: true,

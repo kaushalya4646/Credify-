@@ -58,6 +58,11 @@ async function login(req, res) {
       return res.status(401).json({ error: "Invalid email or password." });
     }
 
+    // Checked after the password so this doesn't reveal which emails exist.
+    if (!user.isActive) {
+      return res.status(403).json({ error: "This account has been suspended. Contact an administrator." });
+    }
+
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
