@@ -129,6 +129,52 @@ function countLabel(n, singular, plural) {
   return `${n} ${n === 1 ? singular : plural}`;
 }
 
+// A profile field counts as filled in if it holds anything but blank text.
+function isFilled(value) {
+  if (value == null) return false;
+  return typeof value === "string" ? value.trim() !== "" : true;
+}
+
+// Candidate profile fields that hold something the candidate entered.
+const CANDIDATE_CONTENT_FIELDS = {
+  bio: "bio",
+  education: "education",
+  links: "links",
+  technicalSkills: "technical skills",
+  careerInterests: "career interests",
+  experienceYears: "years of experience",
+};
+// Recruiter profiles only hold company details (there's no saved-candidates table).
+const RECRUITER_CONTENT_FIELDS = { companyName: "company name", companyWebsite: "company website" };
+
+// Everything about a user that would be lost by deleting them. An empty
+// auto-created profile is not on this list; it's removed along with the user.
+function deleteBlockers(user) {
+  const blockers = [];
+  if (user._count.attempts > 0) {
+    blockers.push(countLabel(user._count.attempts, "assessment attempt", "assessment attempts"));
+  }
+  if (user._count.skillVerifications > 0) {
+    blockers.push(countLabel(user._count.skillVerifications, "skill verification", "skill verifications"));
+  }
+  const cp = user.candidateProfile;
+  if (cp) {
+    if (cp._count.projects > 0) blockers.push(countLabel(cp._count.projects, "project", "projects"));
+    if (cp._count.certifications > 0) {
+      blockers.push(countLabel(cp._count.certifications, "certification", "certifications"));
+    }
+    if (cp.targetCareerRoleId) blockers.push("a selected career role");
+    const filled = Object.entries(CANDIDATE_CONTENT_FIELDS).filter(([f]) => isFilled(cp[f])).map(([, label]) => label);
+    if (filled.length) blockers.push(`profile details (${filled.join(", ")})`);
+  }
+  const rp = user.recruiterProfile;
+  if (rp) {
+    const filled = Object.entries(RECRUITER_CONTENT_FIELDS).filter(([f]) => isFilled(rp[f])).map(([, label]) => label);
+    if (filled.length) blockers.push(`recruiter details (${filled.join(", ")})`);
+  }
+  return blockers;
+}
+
 async function deleteUser(req, res) {
   try {
     const { id } = req.params;
@@ -139,24 +185,25 @@ async function deleteUser(req, res) {
       const user = await tx.user.findUnique({
         where: { id },
         select: {
-          candidateProfile: { select: { id: true } },
-          recruiterProfile: { select: { id: true } },
+          candidateProfile: {
+            select: {
+              ...Object.fromEntries(Object.keys(CANDIDATE_CONTENT_FIELDS).map((f) => [f, true])),
+              targetCareerRoleId: true,
+              _count: { select: { projects: true, certifications: true } },
+            },
+          },
+          recruiterProfile: { select: { companyName: true, companyWebsite: true } },
           _count: { select: { attempts: true, skillVerifications: true } },
         },
       });
       if (!user) return { notFound: true };
 
-      const blockers = [];
-      if (user.candidateProfile) blockers.push("a candidate profile");
-      if (user.recruiterProfile) blockers.push("a recruiter profile");
-      if (user._count.attempts > 0) {
-        blockers.push(countLabel(user._count.attempts, "assessment attempt", "assessment attempts"));
-      }
-      if (user._count.skillVerifications > 0) {
-        blockers.push(countLabel(user._count.skillVerifications, "skill verification", "skill verifications"));
-      }
+      const blockers = deleteBlockers(user);
       if (blockers.length > 0) return { blockers };
 
+      // Nothing to lose: remove the empty profile with the account.
+      await tx.candidateProfile.deleteMany({ where: { userId: id } });
+      await tx.recruiterProfile.deleteMany({ where: { userId: id } });
       await tx.user.delete({ where: { id } });
       return { deleted: true };
     });
