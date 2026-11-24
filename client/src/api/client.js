@@ -8,10 +8,10 @@ function getToken() {
 export const LOGIN_NOTICE_KEY = "credify_login_notice";
 let forcedLogout = false;
 
-// The account was suspended while signed in: clear the session and send the
-// user to the login page with an explanation. Pages load several requests at
-// once, so only the first one acts.
-function logOutSuspendedUser(message) {
+// The account was suspended (or the platform put into maintenance) while
+// signed in: clear the session and send the user to the login page with an
+// explanation. Pages load several requests at once, so only the first acts.
+function forceLogout(message) {
   if (forcedLogout) return;
   forcedLogout = true;
   localStorage.removeItem("credify_token");
@@ -46,9 +46,12 @@ async function request(method, path, body) {
 
   if (!response.ok) {
     const message = (data && data.error) || "Something went wrong.";
-    // Only for signed-in requests: a suspended user trying to log in just sees the message.
+    // Only for signed-in requests: someone trying to log in just sees the message.
     if (token && data && data.code === "ACCOUNT_SUSPENDED") {
-      logOutSuspendedUser("Your account has been suspended. Contact an administrator if you think this is a mistake.");
+      forceLogout("Your account has been suspended. Contact an administrator if you think this is a mistake.");
+    }
+    if (token && data && data.code === "PLATFORM_DISABLED") {
+      forceLogout("Credify is under maintenance. Please try again later.");
     }
     throw new Error(message);
   }

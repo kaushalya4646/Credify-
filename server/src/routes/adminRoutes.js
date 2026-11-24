@@ -8,12 +8,15 @@ const {
   getDashboard,
   getReports,
 } = require("../controllers/adminController");
+const { getAdminSettings, updateAdminSettings } = require("../controllers/settingsController");
 const { requireAuth, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
 router.get("/dashboard", requireAuth, requireRole("ADMIN"), getDashboard);
 router.get("/reports", requireAuth, requireRole("ADMIN"), getReports);
+router.get("/settings", requireAuth, requireRole("ADMIN"), getAdminSettings);
+router.put("/settings", requireAuth, requireRole("ADMIN"), updateAdminSettings);
 router.get("/users", requireAuth, requireRole("ADMIN"), getAllUsers);
 router.put("/users/:id/status", requireAuth, requireRole("ADMIN"), setUserActiveStatus);
 router.put("/users/:id", requireAuth, requireRole("ADMIN"), updateUser);

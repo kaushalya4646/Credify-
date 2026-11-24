@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const prisma = require("../lib/prisma");
 const jwt = require("jsonwebtoken");
+const { getSettings } = require("../lib/settings");
 
 async function register(req, res) {
   try {
@@ -8,6 +9,14 @@ async function register(req, res) {
 
     if (!email || !password || !name || !role) {
       return res.status(400).json({ error: "Email, password, name, and role are required." });
+    }
+
+    const settings = await getSettings();
+    if (!settings.allowRegistration) {
+      return res.status(403).json({ error: "Registration is currently closed. Please try again later." });
+    }
+    if (role === "RECRUITER" && !settings.allowRecruiterRegistration) {
+      return res.status(403).json({ error: "Recruiter registration is currently closed." });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -63,10 +72,16 @@ async function login(req, res) {
       return res.status(403).json({ error: "This account has been suspended. Contact an administrator.", code: "ACCOUNT_SUSPENDED" });
     }
 
+    // Maintenance mode: only admins can sign in.
+    const settings = await getSettings();
+    if (settings.platformDisabled && user.role !== "ADMIN") {
+      return res.status(503).json({ error: "Credify is under maintenance. Please try again later.", code: "PLATFORM_DISABLED" });
+    }
+
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: `${settings.sessionTimeoutMinutes}m` }
     );
 
     res.json({

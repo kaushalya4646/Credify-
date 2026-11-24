@@ -106,13 +106,16 @@ export default function AssessmentsPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [assessmentsData, attemptsData, selectedRole] = await Promise.all([
+        const [assessmentsData, attemptsData, selectedRole, settings] = await Promise.all([
           api.get("/api/assessments"),
           api.get("/api/assessments/attempts/me"),
           api.get("/api/career-roles/me/selected"),
+          api.get("/api/settings/public"),
         ]);
+        // With skill recommendations off, nothing is marked "Recommended".
+        const roleForRecommendations = settings?.skillRecommendations ? selectedRole : null;
         setAssessments(
-          buildCards(assessmentsData || [], attemptsData || [], selectedRole),
+          buildCards(assessmentsData || [], attemptsData || [], roleForRecommendations),
         );
       } catch (err) {
         console.error("Failed to load assessments:", err);

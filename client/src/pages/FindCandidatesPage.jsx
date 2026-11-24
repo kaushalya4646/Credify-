@@ -574,10 +574,13 @@ export default function FindCandidatesPage() {
                     </p>
                   </div>
                 </div>
-                <div className="text-center">
-                  <MatchRing match={bestMatch.match} />
-                  <p className="text-xs text-slate-500 mt-1">Match</p>
-                </div>
+                {/* No "match" field at all = candidate matching is turned off. */}
+                {"match" in bestMatch && (
+                  <div className="text-center">
+                    <MatchRing match={bestMatch.match} />
+                    <p className="text-xs text-slate-500 mt-1">Match</p>
+                  </div>
+                )}
               </div>
 
               <div className="border-t border-slate-100 pt-6 mb-6">
@@ -671,14 +674,16 @@ export default function FindCandidatesPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
-                  <div className="text-center">
-                    <p
-                      className={`font-bold ${c.match == null ? "text-slate-400" : "text-green-700"}`}
-                    >
-                      {formatMatch(c.match)}
-                    </p>
-                    <p className="text-[11px] text-slate-500">Match</p>
-                  </div>
+                  {"match" in c && (
+                    <div className="text-center">
+                      <p
+                        className={`font-bold ${c.match == null ? "text-slate-400" : "text-green-700"}`}
+                      >
+                        {formatMatch(c.match)}
+                      </p>
+                      <p className="text-[11px] text-slate-500">Match</p>
+                    </div>
+                  )}
                   <Link
                     to={`/recruiter/candidates/${c.user.id}`}
                     onClick={() => setExploreOpen(false)}

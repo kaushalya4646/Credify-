@@ -264,6 +264,8 @@ export default function CandidateProfileRecruiterViewPage() {
                       </div>
                     </div>
                   </div>
+                  {/* No "match" field at all = candidate matching is turned off. */}
+                  {"match" in profile && (
                   <div className="text-center">
                     <ScoreRing pct={profile.match} size={88} />
                     <p className="text-xs text-slate-500 mt-2">Match score</p>
@@ -273,6 +275,7 @@ export default function CandidateProfileRecruiterViewPage() {
                       </p>
                     )}
                   </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-3 gap-6">

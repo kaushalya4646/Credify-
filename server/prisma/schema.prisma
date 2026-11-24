@@ -180,3 +180,29 @@ model SkillVerification {
 
   @@unique([userId, skillId])
 }
+
+// Platform-wide settings: a single row with id "singleton".
+model Settings {
+  id                           String   @id @default("singleton")
+  platformName                 String   @default("Credify")
+  platformDescription          String?
+  defaultLanguage              String   @default("en-US")
+  allowRegistration            Boolean  @default(true)
+  requireEmailVerification     Boolean  @default(true)
+  allowRecruiterRegistration   Boolean  @default(true)
+  maxAssessmentDurationMinutes Int      @default(180)
+  maxAttempts                  Int      @default(3)
+  defaultPassingScore          Int      @default(50)
+  randomizeQuestions           Boolean  @default(false)
+  verificationExpiryDays       Int?
+  verificationBadgeMode        String   @default("Allowed")
+  minScoreForVerification      Int      @default(50)
+  recruiterAccessControl       String   @default("All candidates")
+  sessionTimeoutMinutes        Int      @default(1440)
+  dataRetentionDays            Int?
+  skillRecommendations         Boolean  @default(true)
+  careerRecommendations        Boolean  @default(true)
+  candidateMatching            Boolean  @default(true)
+  platformDisabled             Boolean  @default(false)
+  updatedAt                    DateTime @default(now()) @updatedAt
+}

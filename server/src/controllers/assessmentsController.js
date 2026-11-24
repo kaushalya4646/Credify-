@@ -1,5 +1,6 @@
 const prisma = require("../lib/prisma");
 const { Prisma } = require("@prisma/client");
+const { getSettings } = require("../lib/settings");
 
 const VALID_STATUSES = ["Active", "Draft", "Inactive"];
 
@@ -20,6 +21,23 @@ function validateNumbers({ passingScore, durationMinutes }) {
     return "durationMinutes must be a positive whole number (or null).";
   }
   return null;
+}
+
+// Rejects a duration above the platform's maximum. Returns an error message or null.
+function checkMaxDuration(durationMinutes, settings) {
+  if (durationMinutes == null) return null;
+  const max = settings.maxAssessmentDurationMinutes;
+  return durationMinutes > max ? `durationMinutes can't be more than ${max} minutes (the platform maximum).` : null;
+}
+
+// Fisher-Yates shuffle into a new array.
+function shuffle(items) {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
 }
 
 async function getAssessments(req, res) {
@@ -97,6 +115,12 @@ async function getAssessmentById(req, res) {
       return res.status(404).json({ error: "Assessment not found." });
     }
 
+    // Candidates get a shuffled order when the setting is on; admins (the
+    // question editor) always see the stored order.
+    if (req.user.role !== "ADMIN" && (await getSettings()).randomizeQuestions) {
+      assessment.questions = shuffle(assessment.questions);
+    }
+
     res.json(assessment);
   } catch (err) {
     console.error(err);
@@ -127,6 +151,11 @@ async function createAssessment(req, res) {
     if (numberError) {
       return res.status(400).json({ error: numberError });
     }
+    const settings = await getSettings();
+    const durationError = checkMaxDuration(durationMinutes, settings);
+    if (durationError) {
+      return res.status(400).json({ error: durationError });
+    }
     if (status !== undefined && !VALID_STATUSES.includes(status)) {
       return res
         .status(400)
@@ -142,7 +171,7 @@ async function createAssessment(req, res) {
         difficulty,
         type,
         durationMinutes: durationMinutes ?? null,
-        passingScore: passingScore ?? 70,
+        passingScore: passingScore ?? settings.defaultPassingScore,
         status: status ?? "Draft",
       },
     });
@@ -371,6 +400,17 @@ async function submitAttempt(req, res) {
       return res.status(404).json({ error: "Assessment not found." });
     }
 
+    const { maxAttempts } = await getSettings();
+    const previousAttempts = await prisma.assessmentAttempt.count({
+      where: { userId: req.user.userId, assessmentId: id },
+    });
+    if (previousAttempts >= maxAttempts) {
+      return res.status(403).json({
+        error: `You've used all ${maxAttempts} attempt${maxAttempts === 1 ? "" : "s"} allowed for this assessment.`,
+        code: "MAX_ATTEMPTS_REACHED",
+      });
+    }
+
     const { questions } = assessment;
     if (questions.length === 0) {
       return res
@@ -536,6 +576,10 @@ async function updateAssessment(req, res) {
     const numberError = validateNumbers(data);
     if (numberError) {
       return res.status(400).json({ error: numberError });
+    }
+    const durationError = checkMaxDuration(data.durationMinutes, await getSettings());
+    if (durationError) {
+      return res.status(400).json({ error: durationError });
     }
     if ("status" in data && !VALID_STATUSES.includes(data.status)) {
       return res

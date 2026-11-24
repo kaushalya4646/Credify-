@@ -1,4 +1,5 @@
 const prisma = require("../lib/prisma");
+const { getSettings } = require("../lib/settings");
 
 // Same rule as the candidate-facing Skill Gaps page: the share of the
 // candidate's target role's required skills that they have Verified.
@@ -71,6 +72,7 @@ async function searchCandidates(req, res) {
       },
     });
 
+    const matching = (await getSettings()).candidateMatching;
     const candidates = profiles.map((p) => {
       const verified = p.user.skillVerifications;
       return {
@@ -79,10 +81,8 @@ async function searchCandidates(req, res) {
         targetCareerRole: p.targetCareerRole
           ? { name: p.targetCareerRole.name }
           : null,
-        match: computeMatch(
-          p.targetCareerRole,
-          verified.map((v) => v.skillId),
-        ),
+        // Left out entirely when candidate matching is turned off.
+        ...(matching ? { match: computeMatch(p.targetCareerRole, verified.map((v) => v.skillId)) } : {}),
         verifiedSkills: verified.map((v) => v.skill.name),
       };
     });
@@ -152,7 +152,9 @@ async function getCandidateProfile(req, res) {
         score: a.score,
         completedAt: a.completedAt,
       })),
-      match: computeMatch(profile.targetCareerRole, verifiedSkillIds),
+      ...((await getSettings()).candidateMatching
+        ? { match: computeMatch(profile.targetCareerRole, verifiedSkillIds) }
+        : {}),
     });
   } catch (err) {
     console.error(err);

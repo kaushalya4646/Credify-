@@ -8,6 +8,7 @@ const assessmentsRoutes = require("./routes/assessmentsRoutes");
 const recruiterRoutes = require("./routes/recruiterRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const candidatesRoutes = require("./routes/candidatesRoutes");
+const settingsRoutes = require("./routes/settingsRoutes");
 
 const app = express();
 
@@ -26,5 +27,6 @@ app.use("/api/assessments", assessmentsRoutes);
 app.use("/api/recruiter", recruiterRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/candidates", candidatesRoutes);
+app.use("/api/settings", settingsRoutes);
 
 module.exports = app;

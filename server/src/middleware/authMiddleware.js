@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const prisma = require("../lib/prisma");
+const { getSettings } = require("../lib/settings");
 
 // Verifies the token, then checks the account still exists and isn't suspended,
 // so suspending a user also cuts off tokens they were issued before.
@@ -29,6 +30,10 @@ async function requireAuth(req, res, next) {
     }
     if (!user.isActive) {
       return res.status(403).json({ error: "This account has been suspended. Contact an administrator.", code: "ACCOUNT_SUSPENDED" });
+    }
+    // Maintenance mode also cuts off non-admins who were already signed in.
+    if (decoded.role !== "ADMIN" && (await getSettings()).platformDisabled) {
+      return res.status(503).json({ error: "Credify is under maintenance. Please try again later.", code: "PLATFORM_DISABLED" });
     }
   } catch (err) {
     console.error(err);
