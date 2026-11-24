@@ -106,4 +106,38 @@ async function me(req, res) {
   }
 }
 
-module.exports = { register, login, me };
+const MIN_PASSWORD_LENGTH = 8;
+
+// POST /api/auth/change-password, for any logged-in user.
+async function changePassword(req, res) {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (typeof currentPassword !== "string" || !currentPassword) {
+      return res.status(400).json({ error: "Current password is required." });
+    }
+    if (typeof newPassword !== "string" || newPassword.length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ error: `New password must be at least ${MIN_PASSWORD_LENGTH} characters.` });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) {
+      return res.status(401).json({ error: "Current password is incorrect." });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+
+    res.json({ message: "Password changed." });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not change password." });
+  }
+}
+
+module.exports = { register, login, me, changePassword };
