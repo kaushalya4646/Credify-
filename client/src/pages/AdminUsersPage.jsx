@@ -262,7 +262,8 @@ export default function AdminUsersPage() {
       setDeletingUser(null);
     } catch (err) {
       console.error("Failed to delete user:", err);
-      alert("Could not remove this user.");
+      // Show the server's reason (e.g. what's blocking the delete).
+      alert(err.message || "Could not remove this user.");
     }
   }
 

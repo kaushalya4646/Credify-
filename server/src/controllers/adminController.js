@@ -124,14 +124,61 @@ async function resetUserPassword(req, res) {
   }
 }
 
+// "2 assessment attempts", "1 skill verification", ...
+function countLabel(n, singular, plural) {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
 async function deleteUser(req, res) {
   try {
     const { id } = req.params;
-    await prisma.user.delete({ where: { id } });
+
+    // Check everything that references the user explicitly, in the same
+    // transaction as the delete, rather than waiting for a database error.
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id },
+        select: {
+          candidateProfile: { select: { id: true } },
+          recruiterProfile: { select: { id: true } },
+          _count: { select: { attempts: true, skillVerifications: true } },
+        },
+      });
+      if (!user) return { notFound: true };
+
+      const blockers = [];
+      if (user.candidateProfile) blockers.push("a candidate profile");
+      if (user.recruiterProfile) blockers.push("a recruiter profile");
+      if (user._count.attempts > 0) {
+        blockers.push(countLabel(user._count.attempts, "assessment attempt", "assessment attempts"));
+      }
+      if (user._count.skillVerifications > 0) {
+        blockers.push(countLabel(user._count.skillVerifications, "skill verification", "skill verifications"));
+      }
+      if (blockers.length > 0) return { blockers };
+
+      await tx.user.delete({ where: { id } });
+      return { deleted: true };
+    });
+
+    if (result.notFound) {
+      return res.status(404).json({ error: "User not found." });
+    }
+    if (result.blockers) {
+      const list =
+        result.blockers.length === 1
+          ? result.blockers[0]
+          : `${result.blockers.slice(0, -1).join(", ")} and ${result.blockers[result.blockers.length - 1]}`;
+      return res.status(409).json({
+        error: `Cannot delete this user because they have ${list}. Suspend the account instead.`,
+        blockedBy: result.blockers,
+      });
+    }
     res.status(204).send();
   } catch (err) {
-    if (err.code === "P2025") {
-      return res.status(404).json({ error: "User not found." });
+    // Something started referencing the user between the check and the delete.
+    if (err.code === "P2003") {
+      return res.status(409).json({ error: "Cannot delete this user because other records still reference them." });
     }
     console.error(err);
     res.status(500).json({ error: "Could not delete user." });
