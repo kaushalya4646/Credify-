@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/admin/dashboard" },
@@ -73,21 +74,34 @@ function AdminSidebar() {
   );
 }
 
-const popularRoles = [
-  { name: "Senior Frontend Engineer", count: 30, pct: 100 },
-  { name: "Backend Developer", count: 22, pct: 73 },
-  { name: "Data Scientist", count: 17, pct: 57 },
-  { name: "Full-Stack Developer", count: 12, pct: 40 },
-  { name: "Senior Backend Engineer", count: 8, pct: 27 },
+// "Available reports" -> the section of this page each one points at.
+const availableReports = [
+  { label: "User activity", target: "stats" },
+  { label: "Assessment performance", target: "passRate" },
+  { label: "Career role trends", target: "roles" },
+  { label: "Skill verification trends", target: "distribution" },
+  { label: "Recruiter activity", target: "recruiters" },
 ];
 
-const availableReports = [
-  "User activity",
-  "Assessment performance",
-  "Career role trends",
-  "Skill verification trends",
-  "Recruiter activity",
+const RANGE_OPTIONS = [
+  ["7", "Last 7 days"],
+  ["14", "Last 14 days"],
+  ["30", "Last 30 days"],
 ];
+
+function formatNumber(n) {
+  return Number(n ?? 0).toLocaleString();
+}
+
+function formatPct(n) {
+  return n == null ? "—" : `${n}%`;
+}
+
+// Quote a CSV field when it contains a comma, quote or line break.
+function csvField(value) {
+  const s = value == null ? "" : String(value);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
 
 export default function AdminReportsPage() {
   const [openMenu, setOpenMenu] = useState(null); // 'help' | 'notifications' | 'profile' | null
@@ -107,6 +121,123 @@ export default function AdminReportsPage() {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
+  // ---- Filters (options come from the API) ----
+  const [filters, setFilters] = useState({ range: "30", userType: "", careerRoleId: "", skillCategory: "" });
+  const [careerRoles, setCareerRoles] = useState([]);
+  const [skillCategories, setSkillCategories] = useState([]);
+
+  useEffect(() => {
+    api
+      .get("/api/career-roles")
+      .then((roles) => setCareerRoles((roles || []).sort((a, b) => a.name.localeCompare(b.name))))
+      .catch((err) => console.error("Failed to load career roles:", err));
+    api
+      .get("/api/skills")
+      .then((skills) =>
+        setSkillCategories([...new Set((skills || []).map((s) => s.category).filter(Boolean))].sort()),
+      )
+      .catch((err) => console.error("Failed to load skills:", err));
+  }, []);
+
+  // ---- Report data: refetched whenever a filter changes ----
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const latestRequest = useRef(0);
+
+  useEffect(() => {
+    const params = new URLSearchParams({ range: filters.range });
+    if (filters.userType) params.set("userType", filters.userType);
+    if (filters.careerRoleId) params.set("careerRoleId", filters.careerRoleId);
+    if (filters.skillCategory) params.set("skillCategory", filters.skillCategory);
+    // Ignore a slower, older response that arrives after a newer one.
+    const requestId = ++latestRequest.current;
+    setLoading(true);
+    api
+      .get(`/api/admin/reports?${params}`)
+      .then((data) => {
+        if (requestId !== latestRequest.current) return;
+        setReport(data);
+        setError("");
+      })
+      .catch((err) => {
+        if (requestId !== latestRequest.current) return;
+        console.error("Failed to load reports:", err);
+        setError(err.message || "Could not load reports.");
+      })
+      .finally(() => {
+        if (requestId === latestRequest.current) setLoading(false);
+      });
+  }, [filters]);
+
+  function setFilter(key, value) {
+    setFilters((f) => ({ ...f, [key]: value }));
+  }
+
+  // ---- "Available reports": scroll to and briefly highlight a section ----
+  const sectionRefs = {
+    stats: useRef(null),
+    passRate: useRef(null),
+    roles: useRef(null),
+    distribution: useRef(null),
+    recruiters: useRef(null),
+  };
+  const [highlighted, setHighlighted] = useState(null);
+  const highlightTimer = useRef(null);
+
+  function showSection(target) {
+    sectionRefs[target].current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlighted(target);
+    clearTimeout(highlightTimer.current);
+    highlightTimer.current = setTimeout(() => setHighlighted(null), 1600);
+  }
+  useEffect(() => () => clearTimeout(highlightTimer.current), []);
+
+  const highlightClass = (target) =>
+    highlighted === target ? "ring-2 ring-primary ring-offset-2 bg-blue-50 transition-colors" : "transition-colors";
+
+  // ---- Export the numbers currently on screen as CSV ----
+  function exportCsv() {
+    if (!report) return;
+    const roleName = careerRoles.find((r) => r.id === filters.careerRoleId)?.name;
+    const rangeLabel = RANGE_OPTIONS.find(([v]) => v === filters.range)?.[1];
+    const dist = report.skillVerificationDistribution;
+    const rows = [
+      ["Credify report", new Date().toLocaleString()],
+      ["Date range", rangeLabel],
+      ["User type", filters.userType || "All"],
+      ["Career role", roleName || "All"],
+      ["Skill category", filters.skillCategory || "All"],
+      [],
+      ["Metric", "Value"],
+      ["Total users (new in range)", report.totalUsers],
+      ["Assessments completed", report.assessmentsCompleted],
+      ["Pass rate (%)", report.passRatePct ?? "n/a"],
+      ["Skills verified", report.skillsVerified],
+      ["Verification rate (%)", report.verificationRatePct ?? "n/a"],
+      ["Recruiters", report.recruitersCount],
+      ["Verified skills share (%)", dist ? dist.verifiedPct : "n/a"],
+      ["Unverified skills share (%)", dist ? dist.unverifiedPct : "n/a"],
+      [],
+      ["Popular career roles"],
+      ["Career role", "Candidates"],
+      ...report.popularCareerRoles.map((r) => [r.name, r.count]),
+    ];
+    const csv = rows.map((r) => r.map(csvField).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `credify-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  const dist = report?.skillVerificationDistribution;
+  const circumference = 2 * Math.PI * 40;
+
   return (
     <div className="min-h-screen bg-slate-50">
       <AdminSidebar />
@@ -122,7 +253,11 @@ export default function AdminReportsPage() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            <button className="px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">
+            <button
+              onClick={exportCsv}
+              disabled={!report}
+              className="px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
+            >
               Export report
             </button>
             <div className="flex items-center gap-4" ref={menuRef}>
@@ -291,179 +426,160 @@ export default function AdminReportsPage() {
         </header>
 
         <main className="p-10 space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex gap-4">
-            <select className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
-              <option>Last 7 days</option>
-              <option>Last 14 days</option>
-              <option>Last 30 days</option>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-4">
+            <select
+              aria-label="Date range"
+              value={filters.range}
+              onChange={(e) => setFilter("range", e.target.value)}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            >
+              {RANGE_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
-            <select className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
-              <option>User type</option>
-              <option>Candidate</option>
-              <option>Recruiter</option>
+            <select
+              aria-label="User type"
+              value={filters.userType}
+              onChange={(e) => setFilter("userType", e.target.value)}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            >
+              <option value="">All user types</option>
+              <option value="Candidate">Candidate</option>
+              <option value="Recruiter">Recruiter</option>
             </select>
-            <select className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
-              <option>Career role</option>
-              <option>Senior Frontend Engineer</option>
-              <option>Backend Developer</option>
-              <option>Data Scientist</option>
-              <option>Full-Stack Developer</option>
-              <option>Senior Backend Engineer</option>
+            <select
+              aria-label="Career role"
+              value={filters.careerRoleId}
+              onChange={(e) => setFilter("careerRoleId", e.target.value)}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            >
+              <option value="">All career roles</option>
+              {careerRoles.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
             </select>
-            <select className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
-              <option>Skill category</option>
-              <option>Programming</option>
-              <option>Database management</option>
-              <option>API development</option>
+            <select
+              aria-label="Skill category"
+              value={filters.skillCategory}
+              onChange={(e) => setFilter("skillCategory", e.target.value)}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+            >
+              <option value="">All skill categories</option>
+              {skillCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
+            {loading && report && <span className="self-center text-xs text-slate-400">Updating…</span>}
           </div>
 
-          <div className="grid grid-cols-4 gap-6">
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-sm text-slate-500 mb-2">Total users</p>
-              <p className="text-3xl font-bold text-slate-900">280</p>
-              <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                ↑ 12% vs previous period
-              </span>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-sm text-slate-500 mb-2">
-                Assessments completed
-              </p>
-              <p className="text-3xl font-bold text-slate-900">1,842</p>
-              <p className="text-xs text-slate-500 mt-2">Pass rate 74%</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-sm text-slate-500 mb-2">Skills verified</p>
-              <p className="text-3xl font-bold text-slate-900">4,628</p>
-              <p className="text-xs text-slate-500 mt-2">
-                Verification rate 67%
-              </p>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-sm text-slate-500 mb-2">Recruiter activity</p>
-              <p className="text-3xl font-bold text-slate-900">734</p>
-              <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                ↑ 9%
-              </span>
-            </div>
-          </div>
+          {!report && loading && <p className="py-10 text-center text-sm text-slate-500">Loading reports…</p>}
+          {error && <p className="py-4 text-center text-sm text-red-600">{error}</p>}
 
-          <div className="grid grid-cols-2 gap-6">
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="font-medium text-slate-900">
-                User registration trends
-              </h3>
-              <p className="text-sm text-slate-500 mb-4">
-                New registrations over time
-              </p>
-              <p className="text-sm text-slate-400 italic">
-                Line chart renders here (recharts recommended).
-              </p>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="font-medium text-slate-900">
-                Assessment activity
-              </h3>
-              <p className="text-sm text-slate-500 mb-4">
-                Completed assessments by week
-              </p>
-              <p className="text-sm text-slate-400 italic">
-                Bar chart renders here (recharts recommended).
-              </p>
-            </div>
-          </div>
+          {report && (
+            <>
+              <div ref={sectionRefs.stats} className={`grid grid-cols-4 gap-6 rounded-2xl ${highlightClass("stats")}`}>
+                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                  <p className="text-sm text-slate-500 mb-2">Total users</p>
+                  <p className="text-3xl font-bold text-slate-900">{formatNumber(report.totalUsers)}</p>
+                  <p className="text-xs text-slate-500 mt-2">New in the selected period</p>
+                </div>
+                <div ref={sectionRefs.passRate} className={`bg-white rounded-2xl border border-slate-200 p-6 ${highlightClass("passRate")}`}>
+                  <p className="text-sm text-slate-500 mb-2">Assessments completed</p>
+                  <p className="text-3xl font-bold text-slate-900">{formatNumber(report.assessmentsCompleted)}</p>
+                  <p className="text-xs text-slate-500 mt-2">Pass rate {formatPct(report.passRatePct)}</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                  <p className="text-sm text-slate-500 mb-2">Skills verified</p>
+                  <p className="text-3xl font-bold text-slate-900">{formatNumber(report.skillsVerified)}</p>
+                  <p className="text-xs text-slate-500 mt-2">Verification rate {formatPct(report.verificationRatePct)}</p>
+                </div>
+                <div ref={sectionRefs.recruiters} className={`bg-white rounded-2xl border border-slate-200 p-6 ${highlightClass("recruiters")}`}>
+                  <p className="text-sm text-slate-500 mb-2">Recruiters</p>
+                  <p className="text-3xl font-bold text-slate-900">{formatNumber(report.recruitersCount)}</p>
+                  <p className="text-xs text-slate-500 mt-2">All time</p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-3 gap-6">
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="font-medium text-slate-900 mb-1">
-                Popular career roles
-              </h3>
-              <p className="text-sm text-slate-500 mb-4">
-                Career role selections
-              </p>
-              <div className="space-y-3">
-                {popularRoles.map((r) => (
-                  <div key={r.name}>
-                    <div className="flex justify-between text-xs font-medium text-slate-700 mb-1">
-                      <span>{r.name}</span>
-                      <span className="font-semibold text-slate-900">
-                        {r.count}
+              <div className="grid grid-cols-3 gap-6">
+                <div ref={sectionRefs.roles} className={`bg-white rounded-2xl border border-slate-200 p-6 ${highlightClass("roles")}`}>
+                  <h3 className="font-medium text-slate-900 mb-1">Popular career roles</h3>
+                  <p className="text-sm text-slate-500 mb-4">Career role selections</p>
+                  <div className="space-y-3">
+                    {report.popularCareerRoles.map((r) => (
+                      <div key={r.name}>
+                        <div className="flex justify-between text-xs font-medium text-slate-700 mb-1">
+                          <span>{r.name}</span>
+                          <span className="font-semibold text-slate-900">{r.count}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-slate-100">
+                          <div className="h-2 rounded-full bg-primary" style={{ width: `${r.pct}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                    {report.popularCareerRoles.length === 0 && (
+                      <p className="text-sm text-slate-400">No career role selections yet.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div ref={sectionRefs.distribution} className={`bg-white rounded-2xl border border-slate-200 p-6 ${highlightClass("distribution")}`}>
+                  <h3 className="font-medium text-slate-900 mb-1">Skill verification distribution</h3>
+                  <p className="text-sm text-slate-500 mb-4">Verified vs unverified skills</p>
+                  <div className="flex flex-col items-center">
+                    <div className="relative w-28 h-28 flex items-center justify-center">
+                      <svg viewBox="0 0 100 100" className="w-28 h-28 -rotate-90">
+                        <circle cx="50" cy="50" r="40" fill="none" stroke={dist ? "#d5dbe6" : "#eef1f5"} strokeWidth="14" />
+                        {/* No arc for no data or 0% (a round cap would still draw a dot) */}
+                        {dist && dist.verifiedPct > 0 && (
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="40"
+                            fill="none"
+                            stroke="#2563eb"
+                            strokeWidth="14"
+                            strokeLinecap={dist.verifiedPct >= 100 ? "butt" : "round"}
+                            strokeDasharray={`${circumference * (dist.verifiedPct / 100)} ${circumference}`}
+                          />
+                        )}
+                      </svg>
+                      <span className={`absolute text-xl font-bold ${dist ? "text-slate-900" : "text-slate-400"}`}>
+                        {dist ? `${dist.verifiedPct}%` : "—"}
                       </span>
                     </div>
-                    <div className="h-2 rounded-full bg-slate-100">
-                      <div
-                        className="h-2 rounded-full bg-primary"
-                        style={{ width: `${r.pct}%` }}
-                      />
-                    </div>
+                    {dist ? (
+                      <div className="mt-4 space-y-2 w-full text-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-primary" /> Verified — {dist.verifiedPct}% of skills
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full bg-slate-300" /> Unverified — {dist.unverifiedPct}% of skills
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm text-slate-400">No skill verifications yet.</p>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="font-medium text-slate-900 mb-1">
-                Skill verification distribution
-              </h3>
-              <p className="text-sm text-slate-500 mb-4">
-                Verified vs unverified skills
-              </p>
-              <div className="flex flex-col items-center">
-                <div className="relative w-28 h-28 flex items-center justify-center">
-                  <svg viewBox="0 0 100 100" className="w-28 h-28 -rotate-90">
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      stroke="#d5dbe6"
-                      strokeWidth="14"
-                    />
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      stroke="#2563eb"
-                      strokeWidth="14"
-                      strokeLinecap="round"
-                      strokeDasharray={`${2 * Math.PI * 40 * 0.67} ${2 * Math.PI * 40}`}
-                    />
-                  </svg>
-                  <span className="absolute text-xl font-bold text-slate-900">
-                    67%
-                  </span>
                 </div>
-                <div className="mt-4 space-y-2 w-full text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-primary" />{" "}
-                    Verified — 67% of skills
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-slate-300" />{" "}
-                    Unverified — 33% of skills
+
+                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                  <h3 className="font-medium text-slate-900 mb-4">Available reports</h3>
+                  <div className="space-y-1">
+                    {availableReports.map((r) => (
+                      <button
+                        key={r.label}
+                        type="button"
+                        onClick={() => showSection(r.target)}
+                        className="w-full flex items-center justify-between py-3 border-b border-slate-100 last:border-0 text-sm font-medium text-slate-900 hover:text-primary"
+                      >
+                        {r.label} <span className="text-slate-400">›</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="font-medium text-slate-900 mb-4">
-                Available reports
-              </h3>
-              <div className="space-y-1">
-                {availableReports.map((r) => (
-                  <button
-                    key={r}
-                    className="w-full flex items-center justify-between py-3 border-b border-slate-100 last:border-0 text-sm font-medium text-slate-900"
-                  >
-                    {r} <span className="text-slate-400">›</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </main>
       </div>
     </div>

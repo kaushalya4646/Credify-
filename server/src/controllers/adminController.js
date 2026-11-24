@@ -293,6 +293,98 @@ async function getDashboard(req, res) {
   }
 }
 
+const REPORT_RANGES = ["7", "14", "30"];
+const REPORT_USER_TYPES = { Candidate: "CANDIDATE", Recruiter: "RECRUITER" };
+
+// GET /api/admin/reports?range=7|14|30&userType=Candidate|Recruiter&careerRoleId=&skillCategory=
+async function getReports(req, res) {
+  try {
+    const range = req.query.range ?? "30";
+    const { userType, careerRoleId, skillCategory } = req.query;
+    if (!REPORT_RANGES.includes(range)) {
+      return res.status(400).json({ error: "range must be 7, 14 or 30." });
+    }
+    if (userType && !REPORT_USER_TYPES[userType]) {
+      return res.status(400).json({ error: "userType must be Candidate or Recruiter." });
+    }
+
+    const since = new Date(Date.now() - Number(range) * DAY_MS);
+    const skillFilter = skillCategory ? { skill: { category: skillCategory } } : {};
+
+    const [
+      totalUsers,
+      completedInRange,
+      skillsVerified,
+      touchedVerifications,
+      recruitersCount,
+      roleSelections,
+      allVerifications,
+    ] = await Promise.all([
+      prisma.user.count({
+        where: { createdAt: { gte: since }, ...(userType ? { role: REPORT_USER_TYPES[userType] } : {}) },
+      }),
+      prisma.assessmentAttempt.findMany({
+        where: { status: "Completed", completedAt: { gte: since } },
+        select: { score: true, assessment: { select: { passingScore: true } } },
+      }),
+      prisma.skillVerification.count({
+        where: { status: "Verified", verifiedAt: { gte: since }, ...skillFilter },
+      }),
+      // Verification rows created or changed in the range (updatedAt covers both).
+      prisma.skillVerification.findMany({
+        where: { updatedAt: { gte: since }, ...skillFilter },
+        select: { status: true },
+      }),
+      prisma.user.count({ where: { role: "RECRUITER" } }),
+      prisma.candidateProfile.groupBy({
+        by: ["targetCareerRoleId"],
+        where: { targetCareerRoleId: careerRoleId ? careerRoleId : { not: null } },
+        _count: { _all: true },
+      }),
+      prisma.skillVerification.findMany({ where: skillFilter, select: { status: true } }),
+    ]);
+
+    // Pass rate: same rule as the dashboard (each assessment's own pass mark;
+    // ungraded attempts skipped; null when nothing in range was graded).
+    const graded = completedInRange.filter((a) => a.score != null);
+    const passed = graded.filter((a) => a.score >= a.assessment.passingScore).length;
+
+    // Popular career roles: top 5 by selections, bar width relative to the top one.
+    const roleIds = roleSelections.map((r) => r.targetCareerRoleId);
+    if (careerRoleId && !roleIds.includes(careerRoleId)) roleIds.push(careerRoleId);
+    const roles = await prisma.careerRole.findMany({ where: { id: { in: roleIds } }, select: { id: true, name: true } });
+    const countById = new Map(roleSelections.map((r) => [r.targetCareerRoleId, r._count._all]));
+    const ranked = roles
+      .map((r) => ({ name: r.name, count: countById.get(r.id) ?? 0 }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      .slice(0, 5);
+    const top = ranked[0]?.count ?? 0;
+    const popularCareerRoles = ranked.map((r) => ({ ...r, pct: top > 0 ? Math.round((r.count / top) * 100) : 0 }));
+
+    const verifiedAll = allVerifications.filter((v) => v.status === "Verified").length;
+    const verifiedPct = pct(verifiedAll, allVerifications.length);
+
+    res.json({
+      filters: { range: Number(range), userType: userType || null, careerRoleId: careerRoleId || null, skillCategory: skillCategory || null },
+      totalUsers,
+      assessmentsCompleted: completedInRange.length,
+      passRatePct: pct(passed, graded.length),
+      skillsVerified,
+      verificationRatePct: pct(
+        touchedVerifications.filter((v) => v.status === "Verified").length,
+        touchedVerifications.length,
+      ),
+      recruitersCount,
+      popularCareerRoles,
+      skillVerificationDistribution:
+        verifiedPct == null ? null : { verifiedPct, unverifiedPct: 100 - verifiedPct },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not load reports." });
+  }
+}
+
 module.exports = {
   getAllUsers,
   setUserActiveStatus,
@@ -300,4 +392,5 @@ module.exports = {
   resetUserPassword,
   deleteUser,
   getDashboard,
+  getReports,
 };

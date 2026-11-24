@@ -175,6 +175,8 @@ model SkillVerification {
   skill      Skill    @relation(fields: [skillId], references: [id])
   status     String   @default("Not Verified")
   verifiedAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
 
   @@unique([userId, skillId])
 }
