@@ -1,0 +1,180 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CANDIDATE
+  RECRUITER
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  candidateProfile CandidateProfile?
+  recruiterProfile RecruiterProfile?
+  attempts            AssessmentAttempt[]
+  skillVerifications  SkillVerification[]
+}
+  
+model CandidateProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique
+  user       User     @relation(fields: [userId], references: [id])
+  bio        String?
+  education  String?
+  links      String?
+  visibility String   @default("public")
+  createdAt  DateTime @default(now())
+  targetCareerRoleId String?
+  targetCareerRole   CareerRole? @relation(fields: [targetCareerRoleId], references: [id])
+  experienceYears    Int?
+  careerInterests    String?
+  technicalSkills    String? // comma-separated plain text, self-reported, NOT verified
+  projects           Project[]
+  certifications     Certification[]
+}
+
+model Project {
+  id                 String           @id @default(uuid())
+  name               String
+  link               String?
+  candidateProfileId String
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id])
+}
+
+model Certification {
+  id                 String           @id @default(uuid())
+  name               String
+  candidateProfileId String
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id])
+}
+
+model RecruiterProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id])
+  companyName    String?
+  companyWebsite String?
+  createdAt      DateTime @default(now())
+}
+
+model Skill {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  category  String?
+  type      String?
+  status    String   @default("Active")
+  createdAt DateTime @default(now())
+  careerRoles CareerRoleSkill[]
+  assessments Assessment[]
+  skillVerifications SkillVerification[]
+}
+
+model CareerRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  category    String?
+  status      String   @default("Active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  skills     CareerRoleSkill[]
+  candidates CandidateProfile[]
+}
+
+model CareerRoleSkill {
+  id            String     @id @default(uuid())
+  careerRoleId  String
+  careerRole    CareerRole @relation(fields: [careerRoleId], references: [id])
+  skillId       String
+  skill         Skill      @relation(fields: [skillId], references: [id])
+  requiredLevel String
+
+  @@unique([careerRoleId, skillId])
+}
+
+model Assessment {
+  id              String   @id @default(uuid())
+  skillId         String
+  skill           Skill    @relation(fields: [skillId], references: [id])
+  title           String
+  description     String?
+  difficulty      String
+  type            String
+  durationMinutes Int?
+  status          String   @default("Active")
+  passingScore    Int      @default(70)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+  questions       AssessmentQuestion[]
+  attempts        AssessmentAttempt[]
+}
+
+model AssessmentQuestion {
+  id             String     @id @default(uuid())
+  assessmentId   String
+  assessment     Assessment @relation(fields: [assessmentId], references: [id])
+  questionText   String
+  type           String     @default("MCQ") // "MCQ" | "Short answer" | "Long answer"
+  options        Json?      // MCQ only: array of option text strings
+  correctAnswer  String?    // MCQ only: must equal one of the options
+  position       Int        @default(0) // display order within the assessment
+  answers        AttemptAnswer[]
+}
+
+// One row per question a candidate answered in an attempt.
+model AttemptAnswer {
+  id         String             @id @default(uuid())
+  attemptId  String
+  attempt    AssessmentAttempt  @relation(fields: [attemptId], references: [id])
+  questionId String
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id])
+  answer     String
+  isCorrect  Boolean? // null for Short/Long answer (not auto-graded)
+
+  @@unique([attemptId, questionId])
+}
+
+model AssessmentAttempt {
+  id               String     @id @default(uuid())
+  userId           String
+  user             User       @relation(fields: [userId], references: [id])
+  assessmentId     String
+  assessment       Assessment @relation(fields: [assessmentId], references: [id])
+  score            Int?
+  correctCount     Int?
+  totalQuestions   Int?
+  timeTakenSeconds Int?
+  status           String     @default("In Progress")
+  completedAt      DateTime?
+  createdAt        DateTime   @default(now())
+  answers          AttemptAnswer[]
+}
+
+model SkillVerification {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  skillId    String
+  skill      Skill    @relation(fields: [skillId], references: [id])
+  status     String   @default("Not Verified")
+  verifiedAt DateTime?
+
+  @@unique([userId, skillId])
+}
