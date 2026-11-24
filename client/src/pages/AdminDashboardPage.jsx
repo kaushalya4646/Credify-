@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useState, useRef, useEffect } from "react";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/admin/dashboard" },
@@ -27,36 +28,15 @@ const notifications = [
   },
 ];
 
-const registrations = [
-  {
-    initials: "JC",
-    name: "Jane Cooper",
-    role: "Candidate",
-    date: "04/09/2023",
-    location: "Colombo",
-  },
-  {
-    initials: "GH",
-    name: "Guy Hawkins",
-    role: "Recruiter",
-    date: "05/09/2023",
-    location: "Kandy",
-  },
-  {
-    initials: "CE",
-    name: "Campen Erame",
-    role: "Candidate",
-    date: "07/09/2023",
-    location: "Galle",
-  },
-  {
-    initials: "JS",
-    name: "Jane Smith",
-    role: "Recruiter",
-    date: "09/09/2023",
-    location: "Negombo",
-  },
-];
+const ROLE_LABELS = { CANDIDATE: "Candidate", RECRUITER: "Recruiter", ADMIN: "Admin" };
+
+function initials(name = "") {
+  return name.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function formatNumber(n) {
+  return Number(n ?? 0).toLocaleString();
+}
 
 function AdminSidebar() {
   const location = useLocation();
@@ -121,6 +101,21 @@ export default function AdminDashboardPage() {
   function toggleMenu(name) {
     setOpenMenu((m) => (m === name ? null : name));
   }
+
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    api
+      .get("/api/admin/dashboard")
+      .then(setStats)
+      .catch((err) => {
+        console.error("Failed to load dashboard:", err);
+        setError(err.message || "Could not load the dashboard.");
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -301,147 +296,132 @@ export default function AdminDashboardPage() {
         </header>
 
         <main className="p-10 space-y-8">
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">
-                Overall System Health
-              </h2>
-              <span className="px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                Verified
-              </span>
-            </div>
-            <div className="grid grid-cols-4 gap-6">
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <p className="text-sm text-slate-500">Total Users</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2">4,520</p>
-                <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                  ↑ 10.23%
-                </span>
-              </div>
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <p className="text-sm text-slate-500">Candidates</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2">3,800</p>
-                <p className="text-xs text-slate-500 mt-2">85% active</p>
-              </div>
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <p className="text-sm text-slate-500">Recruiters</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2">720</p>
-                <p className="text-xs text-slate-500 mt-2">
-                  Total jobs posted: 720
-                </p>
-              </div>
-              <div className="bg-white rounded-2xl border border-slate-200 p-6">
-                <p className="text-sm text-slate-500">Assessments Completed</p>
-                <p className="text-3xl font-bold text-slate-900 mt-2">4,520</p>
-                <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                  ↑ 16.0%
-                </span>
-              </div>
-            </div>
-          </section>
+          {loading && <p className="py-10 text-center text-sm text-slate-500">Loading dashboard…</p>}
+          {!loading && error && <p className="py-10 text-center text-sm text-red-600">{error}</p>}
 
-          <section className="grid grid-cols-3 gap-6">
-            <div className="col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="font-medium text-slate-900 mb-4">User Activity</h3>
-              <p className="text-sm text-slate-500">
-                New registrations and engagement trend charts render here
-                (recharts/chart.js recommended).
-              </p>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="font-medium text-slate-900 mb-4">
-                Assessment Activity
-              </h3>
-              <div className="flex flex-col items-center">
-                <p className="text-3xl font-bold text-slate-900">82%</p>
-                <p className="text-xs text-slate-500">Pass rate</p>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid grid-cols-3 gap-6">
-            <div className="col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
-              <h3 className="font-medium text-slate-900 mb-4">
-                Recent Registrations
-              </h3>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-slate-500 text-xs">
-                    <th className="pb-2 font-semibold">User</th>
-                    <th className="pb-2 font-semibold">Role</th>
-                    <th className="pb-2 font-semibold">Date</th>
-                    <th className="pb-2 font-semibold">Location</th>
-                    <th className="pb-2 font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {registrations.map((u) => (
-                    <tr key={u.name} className="border-t border-slate-100">
-                      <td className="py-3 flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-full bg-blue-50 text-primary text-[10px] font-semibold flex items-center justify-center">
-                          {u.initials}
-                        </span>
-                        {u.name}
-                      </td>
-                      <td className="text-slate-600">{u.role}</td>
-                      <td className="text-slate-600">{u.date}</td>
-                      <td className="text-slate-600">{u.location}</td>
-                      <td>
-                        <span className="px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                          Active
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
-              <h3 className="font-medium text-slate-900">System Overview</h3>
-              {[
-                ["System uptime", "99.9%", 100],
-                ["Active jobs", "10", 40],
-                ["Active sessions", "128", 64],
-              ].map(([label, val, pct]) => (
-                <div key={label}>
-                  <div className="flex justify-between text-xs text-slate-500 mb-1">
-                    <span>{label}</span>
-                    <span className="font-semibold text-slate-900">{val}</span>
+          {!loading && !error && stats && (
+            <>
+              <section>
+                <h2 className="text-lg font-semibold text-slate-900 mb-4">Overall System Health</h2>
+                <div className="grid grid-cols-4 gap-6">
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                    <p className="text-sm text-slate-500">Total Users</p>
+                    <p className="text-3xl font-bold text-slate-900 mt-2">{formatNumber(stats.totalUsers)}</p>
+                    <p className="text-xs text-slate-500 mt-2">All roles</p>
                   </div>
-                  <div className="h-1.5 rounded-full bg-slate-100">
-                    <div
-                      className="h-1.5 rounded-full bg-primary"
-                      style={{ width: `${pct}%` }}
-                    />
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                    <p className="text-sm text-slate-500">Candidates</p>
+                    <p className="text-3xl font-bold text-slate-900 mt-2">{formatNumber(stats.candidatesCount)}</p>
+                    <p className="text-xs text-slate-500 mt-2">
+                      {stats.candidatesActivePct == null ? "No candidates yet" : `${stats.candidatesActivePct}% active`}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                    <p className="text-sm text-slate-500">Recruiters</p>
+                    <p className="text-3xl font-bold text-slate-900 mt-2">{formatNumber(stats.recruitersCount)}</p>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                    <p className="text-sm text-slate-500">Assessments Completed</p>
+                    <p className="text-3xl font-bold text-slate-900 mt-2">{formatNumber(stats.assessmentsCompletedCount)}</p>
+                    <p className="text-xs text-slate-500 mt-2">Completed attempts</p>
                   </div>
                 </div>
-              ))}
-            </div>
-          </section>
+              </section>
+
+              <section className="grid grid-cols-3 gap-6">
+                <div className="col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
+                  <h3 className="font-medium text-slate-900 mb-4">User Activity</h3>
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <p className="text-3xl font-bold text-slate-900">{formatNumber(stats.newRegistrationsThisWeek)}</p>
+                      <p className="text-sm text-slate-500 mt-1">
+                        new registration{stats.newRegistrationsThisWeek === 1 ? "" : "s"} this week
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-slate-900">{formatNumber(stats.newRegistrationsThisMonth)}</p>
+                      <p className="text-sm text-slate-500 mt-1">this month</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-4">Last 7 and 30 days.</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-6">
+                  <h3 className="font-medium text-slate-900 mb-4">Assessment Activity</h3>
+                  <div className="flex flex-col items-center">
+                    <p className={`text-3xl font-bold ${stats.passRatePct == null ? "text-slate-400" : "text-slate-900"}`}>
+                      {stats.passRatePct == null ? "—" : `${stats.passRatePct}%`}
+                    </p>
+                    <p className="text-xs text-slate-500">Pass rate</p>
+                    {stats.passRatePct == null && (
+                      <p className="text-xs text-slate-400 mt-2">No graded attempts yet</p>
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <section className="bg-white rounded-2xl border border-slate-200 p-6">
+                <h3 className="font-medium text-slate-900 mb-4">Recent Registrations</h3>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-slate-500 text-xs">
+                      <th className="pb-2 font-semibold">User</th>
+                      <th className="pb-2 font-semibold">Role</th>
+                      <th className="pb-2 font-semibold">Date</th>
+                      <th className="pb-2 font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.recentRegistrations.map((u) => (
+                      <tr key={u.id} className="border-t border-slate-100">
+                        <td className="py-3">
+                          <span className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-blue-50 text-primary text-[10px] font-semibold flex items-center justify-center">
+                              {initials(u.name)}
+                            </span>
+                            {u.name}
+                          </span>
+                        </td>
+                        <td className="text-slate-600">{ROLE_LABELS[u.role] || u.role}</td>
+                        <td className="text-slate-600">{new Date(u.createdAt).toLocaleDateString()}</td>
+                        <td>
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              u.isActive ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                            }`}
+                          >
+                            {u.isActive ? "Active" : "Suspended"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {stats.recentRegistrations.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="py-6 text-center text-sm text-slate-500">No users yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </section>
+            </>
+          )}
 
           <section>
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              Quick Actions
-            </h3>
-            <div className="grid grid-cols-3 gap-6">
-              <Link
-                to="/admin/users"
-                className="bg-primary text-white rounded-xl py-3 text-center font-semibold hover:bg-primary-dark"
-              >
-                Manage Users
-              </Link>
-              <Link
-                to="/admin/skills"
-                className="bg-primary text-white rounded-xl py-3 text-center font-semibold hover:bg-primary-dark"
-              >
-                Manage Skills
-              </Link>
-              <Link
-                to="/admin/assessments"
-                className="bg-primary text-white rounded-xl py-3 text-center font-semibold hover:bg-primary-dark"
-              >
-                Manage Assessments
-              </Link>
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">Quick Actions</h3>
+            <div className="grid grid-cols-4 gap-6">
+              {[
+                ["/admin/users", "Manage Users"],
+                ["/admin/career-roles", "Manage Career Roles"],
+                ["/admin/skills", "Manage Skills"],
+                ["/admin/assessments", "Manage Assessments"],
+              ].map(([to, label]) => (
+                <Link
+                  key={to}
+                  to={to}
+                  className="bg-primary text-white rounded-xl py-3 text-center font-semibold hover:bg-primary-dark"
+                >
+                  {label}
+                </Link>
+              ))}
             </div>
           </section>
         </main>

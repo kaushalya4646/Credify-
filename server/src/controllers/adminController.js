@@ -232,4 +232,72 @@ async function deleteUser(req, res) {
   }
 }
 
-module.exports = { getAllUsers, setUserActiveStatus, updateUser, resetUserPassword, deleteUser };
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Percentage rounded to a whole number; null when there's nothing to divide by.
+function pct(part, whole) {
+  return whole > 0 ? Math.round((part / whole) * 100) : null;
+}
+
+// GET /api/admin/dashboard
+async function getDashboard(req, res) {
+  try {
+    const now = Date.now();
+    const [
+      totalUsers,
+      candidatesCount,
+      activeCandidates,
+      recruitersCount,
+      completedAttempts,
+      recent,
+      newThisWeek,
+      newThisMonth,
+    ] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { role: "CANDIDATE" } }),
+      prisma.user.count({ where: { role: "CANDIDATE", isActive: true } }),
+      prisma.user.count({ where: { role: "RECRUITER" } }),
+      prisma.assessmentAttempt.findMany({
+        where: { status: "Completed" },
+        select: { score: true, assessment: { select: { passingScore: true } } },
+      }),
+      prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        select: { id: true, name: true, role: true, createdAt: true, isActive: true },
+      }),
+      prisma.user.count({ where: { createdAt: { gte: new Date(now - 7 * DAY_MS) } } }),
+      prisma.user.count({ where: { createdAt: { gte: new Date(now - 30 * DAY_MS) } } }),
+    ]);
+
+    // Pass rate uses each attempt's own assessment pass mark. Attempts with no
+    // score (assessments with only written answers) can't pass or fail, so
+    // they're left out; null when there's nothing graded yet.
+    const graded = completedAttempts.filter((a) => a.score != null);
+    const passed = graded.filter((a) => a.score >= a.assessment.passingScore).length;
+
+    res.json({
+      totalUsers,
+      candidatesCount,
+      candidatesActivePct: pct(activeCandidates, candidatesCount),
+      recruitersCount,
+      assessmentsCompletedCount: completedAttempts.length,
+      passRatePct: pct(passed, graded.length),
+      recentRegistrations: recent,
+      newRegistrationsThisWeek: newThisWeek,
+      newRegistrationsThisMonth: newThisMonth,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not load the dashboard." });
+  }
+}
+
+module.exports = {
+  getAllUsers,
+  setUserActiveStatus,
+  updateUser,
+  resetUserPassword,
+  deleteUser,
+  getDashboard,
+};
