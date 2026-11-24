@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", to: "/candidate/dashboard" },
@@ -10,33 +11,48 @@ const navItems = [
   { label: "My Profile", to: "/candidate/profile" },
 ];
 
-// TODO (backend step): replace every array/value below with the candidate's real data from the API.
-const verifiedSkills = [
-  { name: "Java", pct: 40 },
-  { name: "Spring Boot", pct: 90 },
-  { name: "SQL", pct: 40 },
-  { name: "REST APIs", pct: 40 },
-];
+const MIN_PASSWORD_LENGTH = 8;
 
-const assessmentResults = [
-  { name: "Recent Java Assessment", date: "04/09/2023", pct: 95 },
-  { name: "Recent SQL Assessment", date: "04/01/2023", pct: 75 },
-];
+function emptyAbout() {
+  return { bio: "", careerInterests: "", education: "", technicalSkills: "", links: "" };
+}
 
-const preferenceOptions = [
-  {
-    title: "Career opportunities",
-    desc: "Updates about roles relevant to your career interests.",
-  },
-  {
-    title: "Assessment reminders",
-    desc: "Reminders to continue your skills journey.",
-  },
-  {
-    title: "Product news and learning tips",
-    desc: "Helpful resources and the latest from Credify.",
-  },
-];
+function emptyPasswordForm() {
+  return { currentPassword: "", newPassword: "", confirmPassword: "" };
+}
+
+// Comma- (or newline-) separated text -> trimmed, non-empty, unique items.
+function splitList(text) {
+  if (!text) return [];
+  return [...new Set(text.split(/[,\n]/).map((s) => s.trim()).filter(Boolean))];
+}
+
+// Links are free text; make sure they open as absolute URLs.
+function toHref(link) {
+  return /^https?:\/\//i.test(link) ? link : `https://${link}`;
+}
+
+function initials(name = "") {
+  return name.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+}
+
+function formatDate(value) {
+  return value ? new Date(value).toLocaleDateString() : "";
+}
+
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+function Notice({ error, success }) {
+  if (error) {
+    return <p role="alert" className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</p>;
+  }
+  if (success) {
+    return <p role="status" className="rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-800">{success}</p>;
+  }
+  return null;
+}
 
 const notifications = [
   {
@@ -112,7 +128,7 @@ export default function CandidateProfilePage() {
   const { pathname } = useLocation();
 
   // which modal is open
-  const [openModal, setOpenModal] = useState(null); // 'editProfile' | 'aboutMe' | 'projects' | 'certifications' | 'verification' | 'accountSettings' | null
+  const [openModal, setOpenModal] = useState(null); // 'editProfile' | 'aboutMe' | 'projects' | 'certifications' | 'verification' | 'privacy' | 'password' | null
 
   // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -132,60 +148,198 @@ export default function CandidateProfilePage() {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
-  // editable state
-  const [profile, setProfile] = useState({
-    name: "Chethina Sri",
-    title: "Backend Developer",
-    education: "The Open University of Sri Lanka",
-  });
+  // ---- Data from GET /api/candidates/me ----
+  const [me, setMe] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  const [about, setAbout] = useState({
-    bio: "Chethina Sri is a professional developer on commercial automation and back end developing.",
-    careerInterests: "Software Architecture and Cloud Computing",
-    education: "The Open University of Sri Lanka",
-  });
+  const [saving, setSaving] = useState(false);
+  const [modalError, setModalError] = useState("");
+  const [modalSuccess, setModalSuccess] = useState("");
 
-  const [projects, setProjects] = useState([
-    { name: "Inventory Management API", link: "GitHub.com/gitHub" },
-    { name: "File Sharing System", link: "GitHub.com/gitHub" },
-  ]);
+  // Modal form state
+  const [nameDraft, setNameDraft] = useState("");
+  const [aboutDraft, setAboutDraft] = useState(emptyAbout());
   const [newProject, setNewProject] = useState({ name: "", link: "" });
+  const [editingProject, setEditingProject] = useState(null); // { id, name, link }
+  const [newCertification, setNewCertification] = useState("");
+  const [editingCertification, setEditingCertification] = useState(null); // { id, name }
+  const [visibilityDraft, setVisibilityDraft] = useState("public");
+  const [passwordForm, setPasswordForm] = useState(emptyPasswordForm());
 
-  const [certifications, setCertifications] = useState([
-    { name: "Google Java Programming", sub: "Certifications" },
-    { name: "Java site", sub: "Certifications" },
-  ]);
-  const [newCertification, setNewCertification] = useState({
-    name: "",
-    sub: "",
-  });
+  async function loadProfile() {
+    try {
+      setMe(await api.get("/api/candidates/me"));
+      setLoadError("");
+    } catch (err) {
+      console.error("Failed to load profile:", err);
+      setLoadError(err.message || "Could not load your profile.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const [account, setAccount] = useState({ email: "", phone: "" });
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
-  function handleAddProject(e) {
+  const displayName = me?.name || "";
+
+  function openModalFor(name) {
+    setModalError("");
+    setModalSuccess("");
+    if (name === "editProfile") setNameDraft(me.name);
+    if (name === "aboutMe") {
+      setAboutDraft({
+        bio: me.bio ?? "",
+        careerInterests: me.careerInterests ?? "",
+        education: me.education ?? "",
+        technicalSkills: me.technicalSkills ?? "",
+        links: me.links ?? "",
+      });
+    }
+    if (name === "projects") {
+      setNewProject({ name: "", link: "" });
+      setEditingProject(null);
+    }
+    if (name === "certifications") {
+      setNewCertification("");
+      setEditingCertification(null);
+    }
+    if (name === "privacy") setVisibilityDraft(me.visibility);
+    if (name === "password") setPasswordForm(emptyPasswordForm());
+    setOpenModal(name);
+  }
+
+  // Runs an API call for a modal: shows errors in the modal, refreshes the
+  // profile afterwards so the page always reflects what's stored.
+  async function run(action, { close = false } = {}) {
+    setSaving(true);
+    setModalError("");
+    setModalSuccess("");
+    try {
+      const result = await action();
+      if (result && result.email) setMe(result); // PUT /me returns the full profile
+      else await loadProfile();
+      if (close) setOpenModal(null);
+      return true;
+    } catch (err) {
+      setModalError(err.message || "Something went wrong.");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ---- Profile + About Me ----
+  function saveName(e) {
     e.preventDefault();
-    if (!newProject.name.trim()) return;
-    setProjects((prev) => [...prev, newProject]);
-    setNewProject({ name: "", link: "" });
+    if (!nameDraft.trim()) return setModalError("Enter your full name.");
+    run(() => api.put("/api/candidates/me", { name: nameDraft.trim() }), { close: true });
   }
 
-  function handleRemoveProject(name) {
-    setProjects((prev) => prev.filter((p) => p.name !== name));
-  }
-
-  function handleAddCertification(e) {
+  function saveAbout(e) {
     e.preventDefault();
-    if (!newCertification.name.trim()) return;
-    setCertifications((prev) => [
-      ...prev,
-      { ...newCertification, sub: newCertification.sub || "Certifications" },
-    ]);
-    setNewCertification({ name: "", sub: "" });
+    // technicalSkills is stored as comma-separated text; tidy the spacing.
+    const technicalSkills = splitList(aboutDraft.technicalSkills).join(", ");
+    run(
+      () =>
+        api.put("/api/candidates/me", {
+          bio: aboutDraft.bio,
+          careerInterests: aboutDraft.careerInterests,
+          education: aboutDraft.education,
+          technicalSkills,
+          links: aboutDraft.links,
+        }),
+      { close: true },
+    );
   }
 
-  function handleRemoveCertification(name) {
-    setCertifications((prev) => prev.filter((c) => c.name !== name));
+  // ---- Projects ----
+  function addProject(e) {
+    e.preventDefault();
+    if (!newProject.name.trim()) return setModalError("Enter a project name.");
+    run(() => api.post("/api/candidates/me/projects", newProject)).then((ok) => {
+      if (ok) setNewProject({ name: "", link: "" });
+    });
   }
+
+  function saveProject(e) {
+    e.preventDefault();
+    if (!editingProject.name.trim()) return setModalError("Project name can't be empty.");
+    run(() =>
+      api.put(`/api/candidates/me/projects/${editingProject.id}`, {
+        name: editingProject.name,
+        link: editingProject.link,
+      }),
+    ).then((ok) => ok && setEditingProject(null));
+  }
+
+  function removeProject(id) {
+    run(() => api.delete(`/api/candidates/me/projects/${id}`));
+  }
+
+  // ---- Certifications ----
+  function addCertification(e) {
+    e.preventDefault();
+    if (!newCertification.trim()) return setModalError("Enter a certification name.");
+    run(() => api.post("/api/candidates/me/certifications", { name: newCertification })).then(
+      (ok) => ok && setNewCertification(""),
+    );
+  }
+
+  function saveCertification(e) {
+    e.preventDefault();
+    if (!editingCertification.name.trim()) return setModalError("Certification name can't be empty.");
+    run(() =>
+      api.put(`/api/candidates/me/certifications/${editingCertification.id}`, {
+        name: editingCertification.name,
+      }),
+    ).then((ok) => ok && setEditingCertification(null));
+  }
+
+  function removeCertification(id) {
+    run(() => api.delete(`/api/candidates/me/certifications/${id}`));
+  }
+
+  // ---- Privacy ----
+  function saveVisibility(e) {
+    e.preventDefault();
+    run(() => api.put("/api/candidates/me", { visibility: visibilityDraft })).then(
+      (ok) => ok && setModalSuccess(`Your profile is now ${visibilityDraft}.`),
+    );
+  }
+
+  // ---- Password ----
+  async function changePassword(e) {
+    e.preventDefault();
+    const { currentPassword, newPassword, confirmPassword } = passwordForm;
+    setModalSuccess("");
+    if (!currentPassword) return setModalError("Enter your current password.");
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      return setModalError(`Your new password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+    }
+    if (newPassword !== confirmPassword) return setModalError("The new passwords don't match.");
+    setSaving(true);
+    setModalError("");
+    try {
+      await api.post("/api/auth/change-password", { currentPassword, newPassword });
+      setPasswordForm(emptyPasswordForm());
+      setModalSuccess("Your password has been changed.");
+    } catch (err) {
+      setModalError(err.message || "Could not change your password.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ---- Derived values ----
+  const verifiedSkills = me?.verifiedSkills ?? [];
+  const results = me?.assessmentResults ?? [];
+  const projects = me?.projects ?? [];
+  const certifications = me?.certifications ?? [];
+  const technicalSkills = splitList(me?.technicalSkills);
+  const links = splitList(me?.links);
 
   return (
     <div className="flex min-h-screen bg-[#F5F7FB]">
@@ -368,10 +522,10 @@ export default function CandidateProfilePage() {
                 className="flex items-center gap-2"
               >
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#EAF1FF] text-xs font-semibold text-primary">
-                  CS
+                  {initials(displayName)}
                 </div>
                 <span className="hidden text-sm font-medium text-gray-700 sm:block">
-                  {profile.name}
+                  {displayName}
                 </span>
                 <svg
                   viewBox="0 0 24 24"
@@ -411,418 +565,371 @@ export default function CandidateProfilePage() {
         </header>
 
         <main className="flex-1 space-y-6 px-6 py-8 lg:px-10">
-          {/* Profile header card */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#EAF1FF] text-xl font-semibold text-primary">
-                  CS
-                </div>
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-bold text-gray-900">
-                      {profile.name}
-                    </h2>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2.5 py-0.5 text-xs font-semibold text-[#15803D]">
-                      ✓ Verified Profile
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-600">{profile.title}</p>
-                  <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
-                    🎓 {profile.education}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setOpenModal("editProfile")}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"
-                >
-                  Edit Profile
-                </button>
-              </div>
-            </div>
+          {loading && (
+            <p className="py-10 text-center text-sm text-gray-500">Loading your profile…</p>
+          )}
+          {!loading && loadError && (
+            <p className="py-10 text-center text-sm text-red-600">{loadError}</p>
+          )}
 
-            <div className="mt-5 flex flex-col gap-2 border-t border-gray-200 pt-4 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-              <p>
-                4 verified skills · 2 assessment results · {projects.length}{" "}
-                projects
-              </p>
-              <p className="text-gray-400">Your candidate profile</p>
-            </div>
-          </div>
-
-          {/* About + skills */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900">
-                  About Me
-                </h3>
-                <button
-                  onClick={() => setOpenModal("aboutMe")}
-                  className="text-sm font-semibold text-primary hover:underline"
-                >
-                  Edit
-                </button>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-gray-600">
-                {about.bio}
-              </p>
-
-              <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Career interests
-              </p>
-              <span className="mt-2 inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-primary">
-                {about.careerInterests}
-              </span>
-
-              <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Education
-              </p>
-              <p className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">
-                🎓 {about.education}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <h3 className="text-base font-semibold text-gray-900">
-                Verified Skills
-              </h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Your verified skills and proficiency levels.
-              </p>
-              <div className="mt-5 space-y-4">
-                {verifiedSkills.map((s) => (
-                  <div key={s.name}>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 font-medium text-gray-900">
-                        {s.name}
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2 py-0.5 text-[11px] font-semibold text-[#15803D]">
-                          ✓ Verified
-                        </span>
-                      </span>
-                      <span className="font-semibold text-gray-900">
-                        {s.pct}%
-                      </span>
+          {!loading && !loadError && me && (
+            <>
+              {/* Profile header card */}
+              <div className="rounded-xl border border-gray-200 bg-white p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#EAF1FF] text-xl font-semibold text-primary">
+                      {initials(me.name)}
                     </div>
-                    <div className="mt-1.5 h-1.5 rounded-full bg-gray-200">
-                      <div
-                        className="h-1.5 rounded-full bg-primary"
-                        style={{ width: `${s.pct}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Projects */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-gray-900">
-                Projects
-              </h3>
-              <button
-                onClick={() => setOpenModal("projects")}
-                className="text-sm font-semibold text-primary hover:underline"
-              >
-                Manage
-              </button>
-            </div>
-            <ul className="mt-4 divide-y divide-gray-100">
-              {projects.map((p) => (
-                <li key={p.name} className="flex items-center gap-3 py-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
-                    📁
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">
-                      {p.name}
-                    </p>
-                    <a
-                      href="#"
-                      className="text-xs text-gray-500 hover:underline"
-                    >
-                      {p.link} ↗
-                    </a>
-                  </div>
-                </li>
-              ))}
-              {projects.length === 0 && (
-                <p className="py-3 text-sm text-gray-500">
-                  No projects added yet.
-                </p>
-              )}
-            </ul>
-          </div>
-
-          {/* Assessment results + certifications */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <h3 className="text-base font-semibold text-gray-900">
-                Assessment Results
-              </h3>
-              <div className="mt-5 grid grid-cols-2 gap-4">
-                {assessmentResults.map((a) => (
-                  <div
-                    key={a.name}
-                    className="rounded-lg border border-gray-200 p-4 text-center"
-                  >
-                    <p className="text-sm font-semibold text-gray-900">
-                      {a.name}
-                    </p>
-                    <p className="text-xs text-gray-500">{a.date}</p>
-                    <div className="mt-3">
-                      <ScoreRing pct={a.pct} />
-                      <p className="mt-1 text-xs text-gray-500">Score</p>
-                    </div>
-                    <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2.5 py-0.5 text-xs font-semibold text-[#15803D]">
-                      ✓ Verified
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900">
-                  Certifications
-                </h3>
-                <button
-                  onClick={() => setOpenModal("certifications")}
-                  className="text-sm font-semibold text-primary hover:underline"
-                >
-                  Manage
-                </button>
-              </div>
-              <ul className="mt-4 divide-y divide-gray-100">
-                {certifications.map((c) => (
-                  <li key={c.name} className="flex items-center gap-3 py-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
-                      🏅
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {c.name}
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-bold text-gray-900">{me.name}</h2>
+                        {verifiedSkills.length > 0 && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2.5 py-0.5 text-xs font-semibold text-[#15803D]">
+                            ✓ Verified Profile
+                          </span>
+                        )}
+                      </div>
+                      {/* Read-only: chosen on the Career Role page */}
+                      <p className="mt-1 text-sm text-gray-600">
+                        {me.targetCareerRole?.name || "No target career role selected"}
                       </p>
-                      <p className="text-xs text-gray-500">{c.sub}</p>
+                      {me.education && (
+                        <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
+                          🎓 {me.education}
+                        </p>
+                      )}
                     </div>
-                  </li>
-                ))}
-                {certifications.length === 0 && (
-                  <p className="py-3 text-sm text-gray-500">
-                    No certifications added yet.
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => openModalFor("editProfile")}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark"
+                    >
+                      Edit Profile
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-2 border-t border-gray-200 pt-4 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                  <p>
+                    {plural(verifiedSkills.length, "verified skill")} ·{" "}
+                    {plural(results.length, "assessment result")} ·{" "}
+                    {plural(projects.length, "project")}
                   </p>
-                )}
-              </ul>
-            </div>
-          </div>
+                  <p className="text-gray-400">
+                    Your candidate profile · {me.visibility === "private" ? "Private" : "Public"}
+                  </p>
+                </div>
+              </div>
 
-          {/* Verified banner */}
-          <div className="rounded-xl border border-green-200 bg-green-50 p-5">
-            <p className="flex items-center gap-2 text-sm font-semibold text-[#15803D]">
-              ✓ Verified Profile
-            </p>
-            <p className="mt-1 text-sm text-green-800">
-              Your profile, 4 skills and both assessment results are marked
-              verified.
-            </p>
-            <button
-              onClick={() => setOpenModal("verification")}
-              className="mt-2 inline-block text-sm font-semibold text-[#15803D] hover:underline"
-            >
-              View verification details →
-            </button>
-          </div>
+              {/* About + skills */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="rounded-xl border border-gray-200 bg-white p-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-gray-900">About Me</h3>
+                    <button
+                      onClick={() => openModalFor("aboutMe")}
+                      className="text-sm font-semibold text-primary hover:underline"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <p className={`mt-3 whitespace-pre-line text-sm leading-6 ${me.bio ? "text-gray-600" : "text-gray-400"}`}>
+                    {me.bio || "No bio yet. Tell recruiters a little about yourself."}
+                  </p>
 
-          {/* Preferences + account settings */}
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">
-              Make Credify work for you
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Control your communication preferences and keep your account up to
-              date.
-            </p>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <h4 className="font-semibold text-gray-900">
-                Communication preferences
-              </h4>
-              <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-                ⓘ Not configured · Select what you&rsquo;d like to receive
-              </p>
-
-              <div className="mt-4 space-y-4">
-                {preferenceOptions.map((p) => (
-                  <label
-                    key={p.title}
-                    className="flex cursor-pointer items-start gap-3"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-[18px] w-[18px] rounded-[5px] border-gray-300 accent-primary"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium text-gray-900">
-                        {p.title}
-                      </span>
-                      <span className="block text-xs text-gray-500">
-                        {p.desc}
-                      </span>
+                  <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Career interests
+                  </p>
+                  {me.careerInterests ? (
+                    <span className="mt-2 inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-primary">
+                      {me.careerInterests}
                     </span>
-                  </label>
-                ))}
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-400">Not added yet</p>
+                  )}
+
+                  <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Education
+                  </p>
+                  <p className={`mt-2 flex items-center gap-2 text-sm font-medium ${me.education ? "text-gray-700" : "text-gray-400"}`}>
+                    {me.education ? <>🎓 {me.education}</> : "Not added yet"}
+                  </p>
+
+                  <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Technical skills <span className="normal-case font-normal">(self-reported)</span>
+                  </p>
+                  {technicalSkills.length > 0 ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {technicalSkills.map((s) => (
+                        <span key={s} className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
+                          {s}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-400">Not added yet</p>
+                  )}
+
+                  <p className="mt-5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Links
+                  </p>
+                  {links.length > 0 ? (
+                    <ul className="mt-2 space-y-1">
+                      {links.map((l) => (
+                        <li key={l}>
+                          <a
+                            href={toHref(l)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="break-all text-sm text-primary hover:underline"
+                          >
+                            {l} ↗
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-400">Not added yet</p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-6">
+                  <h3 className="text-base font-semibold text-gray-900">Verified Skills</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Skills you&rsquo;ve verified, with your best assessment score.
+                  </p>
+                  {verifiedSkills.length === 0 ? (
+                    <p className="mt-5 text-sm text-gray-400">
+                      No verified skills yet.{" "}
+                      <Link to="/candidate/assessments" className="font-semibold text-primary hover:underline">
+                        Take an assessment
+                      </Link>
+                    </p>
+                  ) : (
+                    <div className="mt-5 space-y-4">
+                      {verifiedSkills.map((s) => (
+                        <div key={s.skillName}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2 font-medium text-gray-900">
+                              {s.skillName}
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F5EE] px-2 py-0.5 text-[11px] font-semibold text-[#15803D]">
+                                ✓ Verified
+                              </span>
+                            </span>
+                            {s.score != null && (
+                              <span className="font-semibold text-gray-900">{s.score}%</span>
+                            )}
+                          </div>
+                          {/* No score -> no bar, rather than a misleading 0% */}
+                          {s.score != null && (
+                            <div className="mt-1.5 h-1.5 rounded-full bg-gray-200">
+                              <div className="h-1.5 rounded-full bg-primary" style={{ width: `${s.score}%` }} />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="mt-6 flex items-center justify-between">
-                <a
-                  href="#"
-                  className="text-sm font-semibold text-primary hover:underline"
-                >
-                  Email preferences
-                </a>
-                <button className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-dark">
-                  Save preferences
-                </button>
+              {/* Projects */}
+              <div className="rounded-xl border border-gray-200 bg-white p-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-semibold text-gray-900">Projects</h3>
+                  <button
+                    onClick={() => openModalFor("projects")}
+                    className="text-sm font-semibold text-primary hover:underline"
+                  >
+                    Manage
+                  </button>
+                </div>
+                <ul className="mt-4 divide-y divide-gray-100">
+                  {projects.map((p) => (
+                    <li key={p.id} className="flex items-center gap-3 py-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
+                        📁
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">{p.name}</p>
+                        {p.link && (
+                          <a
+                            href={toHref(p.link)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="break-all text-xs text-gray-500 hover:underline"
+                          >
+                            {p.link} ↗
+                          </a>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                  {projects.length === 0 && (
+                    <p className="py-3 text-sm text-gray-500">No projects added yet.</p>
+                  )}
+                </ul>
               </div>
-            </div>
 
-            <div className="rounded-xl border border-gray-200 bg-white p-6">
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold text-gray-900">
-                  Account settings
-                </h4>
-                <button
-                  onClick={() => setOpenModal("accountSettings")}
-                  className="text-sm font-semibold text-primary hover:underline"
-                >
-                  Manage
-                </button>
+              {/* Assessment results + certifications */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div className="rounded-xl border border-gray-200 bg-white p-6">
+                  <h3 className="text-base font-semibold text-gray-900">Assessment Results</h3>
+                  {results.length === 0 ? (
+                    <p className="mt-5 text-sm text-gray-400">No completed assessments yet.</p>
+                  ) : (
+                    <div className="mt-5 grid grid-cols-2 gap-4">
+                      {results.map((a, i) => (
+                        <div key={`${a.skillName}-${a.completedAt}-${i}`} className="rounded-lg border border-gray-200 p-4 text-center">
+                          <p className="text-sm font-semibold text-gray-900">{a.skillName}</p>
+                          <p className="text-xs text-gray-500">{formatDate(a.completedAt)}</p>
+                          <div className="mt-3">
+                            {a.score != null ? (
+                              <ScoreRing pct={a.score} />
+                            ) : (
+                              <p className="py-6 text-sm text-gray-400">Not scored</p>
+                            )}
+                            <p className="mt-1 text-xs text-gray-500">Score</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-base font-semibold text-gray-900">Certifications</h3>
+                    <button
+                      onClick={() => openModalFor("certifications")}
+                      className="text-sm font-semibold text-primary hover:underline"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                  <ul className="mt-4 divide-y divide-gray-100">
+                    {certifications.map((c) => (
+                      <li key={c.id} className="flex items-center gap-3 py-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
+                          🏅
+                        </div>
+                        <p className="flex-1 text-sm font-semibold text-gray-900">{c.name}</p>
+                      </li>
+                    ))}
+                    {certifications.length === 0 && (
+                      <p className="py-3 text-sm text-gray-500">No certifications added yet.</p>
+                    )}
+                  </ul>
+                </div>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-4 border-b border-gray-100 pb-5">
-                <div>
+              {/* Verified banner */}
+              {verifiedSkills.length > 0 ? (
+                <div className="rounded-xl border border-green-200 bg-green-50 p-5">
+                  <p className="flex items-center gap-2 text-sm font-semibold text-[#15803D]">✓ Verified Profile</p>
+                  <p className="mt-1 text-sm text-green-800">
+                    {plural(verifiedSkills.length, "verified skill")} and{" "}
+                    {plural(results.length, "completed assessment")} on your profile.
+                  </p>
+                  <button
+                    onClick={() => openModalFor("verification")}
+                    className="mt-2 inline-block text-sm font-semibold text-[#15803D] hover:underline"
+                  >
+                    View verification details →
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-white p-5">
+                  <p className="text-sm font-semibold text-gray-900">Not verified yet</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Pass an assessment to verify your first skill.
+                  </p>
+                  <button
+                    onClick={() => openModalFor("verification")}
+                    className="mt-2 inline-block text-sm font-semibold text-primary hover:underline"
+                  >
+                    View verification details →
+                  </button>
+                </div>
+              )}
+
+              {/* Account settings */}
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Make Credify work for you</h3>
+                <p className="mt-1 text-sm text-gray-500">Keep your account secure and choose who can see your profile.</p>
+              </div>
+
+              <div className="rounded-xl border border-gray-200 bg-white p-6 lg:max-w-2xl">
+                <h4 className="font-semibold text-gray-900">Account settings</h4>
+
+                <div className="mt-4 border-b border-gray-100 pb-5">
                   <p className="text-xs text-gray-500">Email address</p>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {account.email || "Not provided"}
-                  </p>
+                  <p className="text-sm font-semibold text-gray-900">{me.email}</p>
                 </div>
-                <div>
-                  <p className="text-xs text-gray-500">Phone number</p>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {account.phone || "Not provided"}
-                  </p>
+
+                <button
+                  type="button"
+                  onClick={() => openModalFor("password")}
+                  className="flex w-full items-center gap-3 border-b border-gray-100 py-3 text-left"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-gray-500">🔒</span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-medium text-gray-900">Password &amp; security</span>
+                    <span className="block text-xs text-gray-500">Change your password</span>
+                  </span>
+                  <span className="text-gray-300">›</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openModalFor("privacy")}
+                  className="flex w-full items-center gap-3 py-3 text-left"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-gray-500">🛡</span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-medium text-gray-900">Privacy &amp; profile visibility</span>
+                    <span className="block text-xs text-gray-500">
+                      Currently {me.visibility === "private" ? "private — hidden from recruiters" : "public — visible to recruiters"}
+                    </span>
+                  </span>
+                  <span className="text-gray-300">›</span>
+                </button>
+
+                <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4 text-sm">
+                  <a href="#" className="font-semibold text-primary hover:underline">Download my data</a>
+                  <a href="#" className="font-semibold text-gray-400 hover:underline">Close account</a>
                 </div>
               </div>
-
-              <a
-                href="#"
-                className="flex items-center gap-3 border-b border-gray-100 py-3"
-              >
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
-                  🔒
-                </span>
-                <span className="flex-1">
-                  <span className="block text-sm font-medium text-gray-900">
-                    Password &amp; security
-                  </span>
-                  <span className="block text-xs text-gray-500">
-                    Manage how you access your account
-                  </span>
-                </span>
-                <span className="text-gray-300">›</span>
-              </a>
-              <a href="#" className="flex items-center gap-3 py-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
-                  🛡
-                </span>
-                <span className="flex-1">
-                  <span className="block text-sm font-medium text-gray-900">
-                    Privacy &amp; profile visibility
-                  </span>
-                  <span className="block text-xs text-gray-500">
-                    Choose how your profile is shared
-                  </span>
-                </span>
-                <span className="text-gray-300">›</span>
-              </a>
-
-              <div className="mt-4 flex items-center justify-between border-t border-gray-100 pt-4 text-sm">
-                <a
-                  href="#"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  Download my data
-                </a>
-                <a
-                  href="#"
-                  className="font-semibold text-gray-400 hover:underline"
-                >
-                  Close account
-                </a>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </main>
       </div>
 
       {/* Edit Profile modal */}
       {openModal === "editProfile" && (
         <Modal title="Edit profile" onClose={() => setOpenModal(null)}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setOpenModal(null);
-            }}
-            className="space-y-4"
-          >
+          <form onSubmit={saveName} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Full name
-              </label>
+              <label htmlFor="fullName" className="block text-xs font-semibold text-gray-700 mb-1.5">Full name</label>
               <input
-                value={profile.name}
-                onChange={(e) =>
-                  setProfile((p) => ({ ...p, name: e.target.value }))
-                }
+                id="fullName"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Title / Role
-              </label>
-              <input
-                value={profile.title}
-                onChange={(e) =>
-                  setProfile((p) => ({ ...p, title: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Education
-              </label>
-              <input
-                value={profile.education}
-                onChange={(e) =>
-                  setProfile((p) => ({ ...p, education: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
-              />
-            </div>
+            <p className="text-xs text-gray-500">
+              Your target career role is set on the{" "}
+              <Link to="/candidate/career-role" className="font-semibold text-primary hover:underline">Career Role</Link> page.
+            </p>
+            <Notice error={modalError} />
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Save changes
+              {saving ? "Saving…" : "Save changes"}
             </button>
           </form>
         </Modal>
@@ -831,55 +938,46 @@ export default function CandidateProfilePage() {
       {/* About Me modal */}
       {openModal === "aboutMe" && (
         <Modal title="Edit About Me" onClose={() => setOpenModal(null)}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setOpenModal(null);
-            }}
-            className="space-y-4"
-          >
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Bio
-              </label>
-              <textarea
-                rows={3}
-                value={about.bio}
-                onChange={(e) =>
-                  setAbout((a) => ({ ...a, bio: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm resize-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Career interests
-              </label>
-              <input
-                value={about.careerInterests}
-                onChange={(e) =>
-                  setAbout((a) => ({ ...a, careerInterests: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Education
-              </label>
-              <input
-                value={about.education}
-                onChange={(e) =>
-                  setAbout((a) => ({ ...a, education: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
-              />
-            </div>
+          <form onSubmit={saveAbout} className="space-y-4">
+            {[
+              ["bio", "Bio", "textarea", "A few sentences about you"],
+              ["careerInterests", "Career interests", "input", "e.g. Cloud infrastructure"],
+              ["education", "Education", "input", "e.g. BSc in Computer Science"],
+              ["technicalSkills", "Technical skills", "input", "Comma-separated, e.g. Docker, PostgreSQL, Git"],
+              ["links", "Links", "input", "Comma-separated, e.g. github.com/you, linkedin.com/in/you"],
+            ].map(([field, label, kind, placeholder]) => (
+              <div key={field}>
+                <label htmlFor={`about-${field}`} className="block text-xs font-semibold text-gray-700 mb-1.5">{label}</label>
+                {kind === "textarea" ? (
+                  <textarea
+                    id={`about-${field}`}
+                    rows={4}
+                    value={aboutDraft[field]}
+                    onChange={(e) => setAboutDraft((a) => ({ ...a, [field]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm resize-y"
+                  />
+                ) : (
+                  <input
+                    id={`about-${field}`}
+                    value={aboutDraft[field]}
+                    onChange={(e) => setAboutDraft((a) => ({ ...a, [field]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
+                  />
+                )}
+                {field === "technicalSkills" && (
+                  <p className="mt-1 text-xs text-gray-500">Self-reported. Verified skills come from assessments.</p>
+                )}
+              </div>
+            ))}
+            <Notice error={modalError} />
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Save changes
+              {saving ? "Saving…" : "Save changes"}
             </button>
           </form>
         </Modal>
@@ -889,56 +987,64 @@ export default function CandidateProfilePage() {
       {openModal === "projects" && (
         <Modal title="Manage projects" onClose={() => setOpenModal(null)}>
           <ul className="divide-y divide-gray-100 mb-5">
-            {projects.map((p) => (
-              <li
-                key={p.name}
-                className="flex items-center justify-between py-3"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {p.name}
-                  </p>
-                  <p className="text-xs text-gray-500">{p.link}</p>
-                </div>
-                <button
-                  onClick={() => handleRemoveProject(p.name)}
-                  className="text-xs font-semibold text-red-600 hover:underline"
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-            {projects.length === 0 && (
-              <p className="py-3 text-sm text-gray-500">No projects yet.</p>
+            {projects.map((p) =>
+              editingProject?.id === p.id ? (
+                <li key={p.id} className="py-3">
+                  <form onSubmit={saveProject} className="space-y-2">
+                    <input
+                      aria-label="Project name"
+                      value={editingProject.name}
+                      onChange={(e) => setEditingProject((x) => ({ ...x, name: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                    />
+                    <input
+                      aria-label="Project link"
+                      value={editingProject.link}
+                      onChange={(e) => setEditingProject((x) => ({ ...x, link: e.target.value }))}
+                      placeholder="Link (optional)"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={saving} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">Save</button>
+                      <button type="button" onClick={() => setEditingProject(null)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700">Cancel</button>
+                    </div>
+                  </form>
+                </li>
+              ) : (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{p.name}</p>
+                    {p.link && <p className="break-all text-xs text-gray-500">{p.link}</p>}
+                  </div>
+                  <div className="flex shrink-0 gap-3">
+                    <button onClick={() => { setModalError(""); setEditingProject({ id: p.id, name: p.name, link: p.link ?? "" }); }} className="text-xs font-semibold text-primary hover:underline">Edit</button>
+                    <button onClick={() => removeProject(p.id)} disabled={saving} className="text-xs font-semibold text-red-600 hover:underline">Remove</button>
+                  </div>
+                </li>
+              ),
             )}
+            {projects.length === 0 && <p className="py-3 text-sm text-gray-500">No projects yet.</p>}
           </ul>
 
-          <form
-            onSubmit={handleAddProject}
-            className="space-y-3 border-t border-gray-100 pt-4"
-          >
-            <p className="text-xs font-semibold text-gray-700">
-              Import a project
-            </p>
+          <form onSubmit={addProject} className="space-y-3 border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-700">Add a project</p>
             <input
               value={newProject.name}
-              onChange={(e) =>
-                setNewProject((p) => ({ ...p, name: e.target.value }))
-              }
+              onChange={(e) => setNewProject((p) => ({ ...p, name: e.target.value }))}
               placeholder="Project name"
               className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
             />
             <input
               value={newProject.link}
-              onChange={(e) =>
-                setNewProject((p) => ({ ...p, link: e.target.value }))
-              }
+              onChange={(e) => setNewProject((p) => ({ ...p, link: e.target.value }))}
               placeholder="Repository link (e.g. GitHub URL)"
               className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
             />
+            <Notice error={modalError} />
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
               Add project
             </button>
@@ -950,60 +1056,48 @@ export default function CandidateProfilePage() {
       {openModal === "certifications" && (
         <Modal title="Manage certifications" onClose={() => setOpenModal(null)}>
           <ul className="divide-y divide-gray-100 mb-5">
-            {certifications.map((c) => (
-              <li
-                key={c.name}
-                className="flex items-center justify-between py-3"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">
-                    {c.name}
-                  </p>
-                  <p className="text-xs text-gray-500">{c.sub}</p>
-                </div>
-                <button
-                  onClick={() => handleRemoveCertification(c.name)}
-                  className="text-xs font-semibold text-red-600 hover:underline"
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
-            {certifications.length === 0 && (
-              <p className="py-3 text-sm text-gray-500">
-                No certifications yet.
-              </p>
+            {certifications.map((c) =>
+              editingCertification?.id === c.id ? (
+                <li key={c.id} className="py-3">
+                  <form onSubmit={saveCertification} className="flex gap-2">
+                    <input
+                      aria-label="Certification name"
+                      value={editingCertification.name}
+                      onChange={(e) => setEditingCertification((x) => ({ ...x, name: e.target.value }))}
+                      className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                    />
+                    <button type="submit" disabled={saving} className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">Save</button>
+                    <button type="button" onClick={() => setEditingCertification(null)} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700">Cancel</button>
+                  </form>
+                </li>
+              ) : (
+                <li key={c.id} className="flex items-center justify-between gap-3 py-3">
+                  <p className="text-sm font-semibold text-gray-900">{c.name}</p>
+                  <div className="flex shrink-0 gap-3">
+                    <button onClick={() => { setModalError(""); setEditingCertification({ id: c.id, name: c.name }); }} className="text-xs font-semibold text-primary hover:underline">Edit</button>
+                    <button onClick={() => removeCertification(c.id)} disabled={saving} className="text-xs font-semibold text-red-600 hover:underline">Remove</button>
+                  </div>
+                </li>
+              ),
             )}
+            {certifications.length === 0 && <p className="py-3 text-sm text-gray-500">No certifications yet.</p>}
           </ul>
 
-          <form
-            onSubmit={handleAddCertification}
-            className="space-y-3 border-t border-gray-100 pt-4"
-          >
-            <p className="text-xs font-semibold text-gray-700">
-              Import a certificate
-            </p>
+          <form onSubmit={addCertification} className="space-y-3 border-t border-gray-100 pt-4">
+            <p className="text-xs font-semibold text-gray-700">Add a certification</p>
             <input
-              value={newCertification.name}
-              onChange={(e) =>
-                setNewCertification((c) => ({ ...c, name: e.target.value }))
-              }
-              placeholder="Certificate name"
+              value={newCertification}
+              onChange={(e) => setNewCertification(e.target.value)}
+              placeholder="Certification name"
               className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
             />
-            <input
-              value={newCertification.sub}
-              onChange={(e) =>
-                setNewCertification((c) => ({ ...c, sub: e.target.value }))
-              }
-              placeholder="Issuer (optional)"
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
-            />
+            <Notice error={modalError} />
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Add certificate
+              Add certification
             </button>
           </form>
         </Modal>
@@ -1014,96 +1108,88 @@ export default function CandidateProfilePage() {
         <Modal title="Verification details" onClose={() => setOpenModal(null)}>
           <div className="space-y-4 text-sm text-gray-600">
             <p>
-              A verified profile means your identity, skills and assessment
-              results have been confirmed by Credify.
+              A skill is verified when you pass a Credify assessment for it. Once
+              verified, it stays verified even if a later attempt scores lower.
             </p>
-            <div>
-              <p className="font-semibold text-gray-900 mb-1">
-                To get verified, you need to:
-              </p>
-              <ul className="list-disc list-inside space-y-1">
-                <li>
-                  Complete at least one technical assessment with a passing
-                  score
-                </li>
-                <li>Confirm your email address and phone number</li>
-                <li>Keep your education details accurate and up to date</li>
-                <li>
-                  Avoid any flagged or suspicious activity during assessments
-                </li>
-              </ul>
-            </div>
-            <p className="text-xs text-gray-500">
-              Verification badges refresh automatically whenever your skills or
-              results change.
+            <p>
+              Each verified skill shows your best completed score for that skill.
+              Self-reported technical skills are listed separately and aren&rsquo;t verified.
             </p>
           </div>
         </Modal>
       )}
 
-      {/* Account settings modal */}
-      {openModal === "accountSettings" && (
-        <Modal title="Account settings" onClose={() => setOpenModal(null)}>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setOpenModal(null);
-            }}
-            className="space-y-4"
-          >
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Email address
-              </label>
-              <div className="flex gap-2">
+      {/* Privacy modal */}
+      {openModal === "privacy" && (
+        <Modal title="Privacy & profile visibility" onClose={() => setOpenModal(null)}>
+          <form onSubmit={saveVisibility} className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Currently <span className="font-semibold text-gray-900">{me.visibility}</span>.
+            </p>
+            {[
+              ["public", "Public", "Recruiters can find you in search and open your profile."],
+              ["private", "Private", "You're hidden from recruiter search and your profile can't be opened by recruiters."],
+            ].map(([value, label, desc]) => (
+              <label key={value} className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3">
                 <input
-                  value={account.email}
-                  onChange={(e) =>
-                    setAccount((a) => ({ ...a, email: e.target.value }))
-                  }
-                  placeholder="you@example.com"
-                  className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
+                  type="radio"
+                  name="visibility"
+                  value={value}
+                  checked={visibilityDraft === value}
+                  onChange={() => { setModalSuccess(""); setVisibilityDraft(value); }}
+                  className="mt-1 accent-primary"
                 />
-                {account.email && (
-                  <button
-                    type="button"
-                    onClick={() => setAccount((a) => ({ ...a, email: "" }))}
-                    className="text-xs font-semibold text-red-600"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                Phone number
+                <span>
+                  <span className="block text-sm font-medium text-gray-900">{label}</span>
+                  <span className="block text-xs text-gray-500">{desc}</span>
+                </span>
               </label>
-              <div className="flex gap-2">
-                <input
-                  value={account.phone}
-                  onChange={(e) =>
-                    setAccount((a) => ({ ...a, phone: e.target.value }))
-                  }
-                  placeholder="+94 7X XXX XXXX"
-                  className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
-                />
-                {account.phone && (
-                  <button
-                    type="button"
-                    onClick={() => setAccount((a) => ({ ...a, phone: "" }))}
-                    className="text-xs font-semibold text-red-600"
-                  >
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
+            ))}
+            <Notice error={modalError} success={modalSuccess} />
             <button
               type="submit"
-              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+              disabled={saving || visibilityDraft === me.visibility}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
             >
-              Save changes
+              {saving ? "Saving…" : "Save visibility"}
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Password modal */}
+      {openModal === "password" && (
+        <Modal title="Password & security" onClose={() => setOpenModal(null)}>
+          <form onSubmit={changePassword} className="space-y-4">
+            {[
+              ["currentPassword", "Current password", "current-password"],
+              ["newPassword", "New password", "new-password"],
+              ["confirmPassword", "Confirm new password", "new-password"],
+            ].map(([field, label, autoComplete]) => (
+              <div key={field}>
+                <label htmlFor={field} className="block text-xs font-semibold text-gray-700 mb-1.5">{label}</label>
+                <input
+                  id={field}
+                  type="password"
+                  autoComplete={autoComplete}
+                  value={passwordForm[field]}
+                  onChange={(e) => {
+                    setModalError("");
+                    setModalSuccess("");
+                    setPasswordForm((f) => ({ ...f, [field]: e.target.value }));
+                  }}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-sm"
+                />
+              </div>
+            ))}
+            <p className="text-xs text-gray-500">At least {MIN_PASSWORD_LENGTH} characters.</p>
+            <Notice error={modalError} success={modalSuccess} />
+            <button
+              type="submit"
+              disabled={saving}
+              className="w-full min-h-11 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-dark disabled:opacity-60"
+            >
+              {saving ? "Changing…" : "Change password"}
             </button>
           </form>
         </Modal>
