@@ -74,7 +74,10 @@ export default function CandidateDashboardPage() {
   }
 
   const verifiedCount = verifications.filter((v) => v.status === 'Verified').length
-  const completedCount = attempts.filter((a) => a.status === 'Completed').length
+  // Distinct assessments, so retakes don't inflate the count.
+  const completedCount = new Set(
+    attempts.filter((a) => a.status === 'Completed').map((a) => a.assessmentId)
+  ).size
 
   // Match % and gap count against the selected role's required skills, if any.
   let matchPct = null

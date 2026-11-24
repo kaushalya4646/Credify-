@@ -42,7 +42,10 @@ export default function SkillGapsPage() {
   }, []);
 
   function statusFor(skillId) {
-    const verified = verifications.some((v) => v.skillId === skillId);
+    // A failed attempt also leaves a "Not Verified" record, so check the status.
+    const verified = verifications.some(
+      (v) => v.skillId === skillId && v.status === "Verified",
+    );
     if (verified) return "verified";
     const attempted = attempts.some((a) => a.assessment?.skillId === skillId);
     if (attempted) return "in-progress";

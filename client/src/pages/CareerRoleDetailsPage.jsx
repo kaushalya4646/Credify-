@@ -58,7 +58,10 @@ export default function CareerRoleDetailsPage() {
 
   // For each required skill, figure out the candidate's real status.
   function statusFor(skillId) {
-    const verified = verifications.some((v) => v.skillId === skillId);
+    // A failed attempt also leaves a "Not Verified" record, so check the status.
+    const verified = verifications.some(
+      (v) => v.skillId === skillId && v.status === "Verified",
+    );
     if (verified) return "Verified";
     const attempted = attempts.some((a) => a.assessment?.skillId === skillId);
     if (attempted) return "In Progress";

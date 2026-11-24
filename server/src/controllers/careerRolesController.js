@@ -215,8 +215,12 @@ async function deleteCareerRole(req, res) {
   try {
     const { id } = req.params;
 
-    await prisma.careerRoleSkill.deleteMany({ where: { careerRoleId: id } });
-    await prisma.careerRole.delete({ where: { id } });
+    // One transaction: if the role can't be deleted (e.g. candidates have
+    // selected it), its required-skill links are kept too.
+    await prisma.$transaction([
+      prisma.careerRoleSkill.deleteMany({ where: { careerRoleId: id } }),
+      prisma.careerRole.delete({ where: { id } }),
+    ]);
 
     res.status(204).send();
   } catch (err) {
