@@ -157,6 +157,14 @@ function deleteBlockers(user) {
   if (user._count.skillVerifications > 0) {
     blockers.push(countLabel(user._count.skillVerifications, "skill verification", "skill verifications"));
   }
+  if (user._count.postedJobs > 0) {
+    const posts = countLabel(user._count.postedJobs, "job posting", "job postings");
+    const apps = user.applicationsToTheirJobs;
+    blockers.push(apps > 0 ? `${posts} (with ${countLabel(apps, "application", "applications")})` : posts);
+  }
+  if (user._count.applications > 0) {
+    blockers.push(countLabel(user._count.applications, "job application", "job applications"));
+  }
   const cp = user.candidateProfile;
   if (cp) {
     if (cp._count.projects > 0) blockers.push(countLabel(cp._count.projects, "project", "projects"));
@@ -193,10 +201,14 @@ async function deleteUser(req, res) {
             },
           },
           recruiterProfile: { select: { companyName: true, companyWebsite: true } },
-          _count: { select: { attempts: true, skillVerifications: true } },
+          _count: { select: { attempts: true, skillVerifications: true, postedJobs: true, applications: true } },
         },
       });
       if (!user) return { notFound: true };
+      // Applications other candidates sent to this recruiter's jobs.
+      user.applicationsToTheirJobs = user._count.postedJobs
+        ? await tx.application.count({ where: { job: { recruiterId: id } } })
+        : 0;
 
       const blockers = deleteBlockers(user);
       if (blockers.length > 0) return { blockers };

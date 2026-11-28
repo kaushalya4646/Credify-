@@ -1,4 +1,5 @@
 const prisma = require("../lib/prisma");
+const { getSettings } = require("../lib/settings");
 
 const EMPLOYMENT_TYPES = ["full-time", "part-time"];
 const SKILL_LEVELS = ["required", "preferred", "optional"];
@@ -39,6 +40,11 @@ async function verifiedSkillIdsOf(userId) {
     select: { skillId: true },
   });
   return new Set(rows.map((r) => r.skillId));
+}
+
+async function currentSkillIds(jobId) {
+  const rows = await prisma.jobSkill.findMany({ where: { jobId }, select: { skillId: true } });
+  return rows.map((r) => r.skillId);
 }
 
 const trimmed = (v) => (typeof v === "string" ? v.trim() : v);
@@ -135,9 +141,17 @@ async function parseJob(body, existing = null) {
     if (list.length > 0) {
       const found = await prisma.skill.findMany({
         where: { id: { in: [...seen] } },
-        select: { id: true },
+        select: { id: true, name: true, status: true },
       });
       if (found.length !== seen.size) return { error: "One or more skillIds don't match an existing skill." };
+      // Inactive skills can't be added. One the job already had (added before it
+      // was deactivated) may stay, so re-sending the current list still works.
+      const kept = new Set(existing ? await currentSkillIds(existing.id) : []);
+      const inactive = found.filter((s) => s.status === "Inactive" && !kept.has(s.id));
+      if (inactive.length > 0) {
+        const names = inactive.map((s) => `"${s.name}"`).join(", ");
+        return { error: `${names} ${inactive.length === 1 ? "is" : "are"} Inactive and can't be added to a job.` };
+      }
     }
     skills = list.map((s) => ({ skillId: s.skillId, level: s.level }));
   }
@@ -309,14 +323,16 @@ async function getJobById(req, res) {
       result.applicationsCount = await prisma.application.count({ where: { jobId: job.id } });
     }
     if (req.user.role === "CANDIDATE") {
-      const [verified, application] = await Promise.all([
+      const [verified, application, settings] = await Promise.all([
         verifiedSkillIdsOf(req.user.userId),
         prisma.application.findUnique({
           where: { jobId_candidateUserId: { jobId: job.id, candidateUserId: req.user.userId } },
           select: { id: true, status: true },
         }),
+        getSettings(),
       ]);
-      const match = matchPercent(jobSkills, verified);
+      // Left out when the job has no required/preferred skills or matching is turned off.
+      const match = settings.candidateMatching ? matchPercent(jobSkills, verified) : undefined;
       if (match !== undefined) result.match = match;
       result.hasApplied = application?.status === "Applied";
       result.application = application;
@@ -344,15 +360,17 @@ async function listActiveJobs(req, res) {
     });
 
     const isCandidate = req.user.role === "CANDIDATE";
-    let verified, applications;
+    let verified, applications, matching;
     if (isCandidate) {
-      const [v, apps] = await Promise.all([
+      const [v, apps, settings] = await Promise.all([
         verifiedSkillIdsOf(req.user.userId),
         prisma.application.findMany({
           where: { candidateUserId: req.user.userId, jobId: { in: jobs.map((j) => j.id) } },
           select: { id: true, jobId: true, status: true },
         }),
+        getSettings(),
       ]);
+      matching = settings.candidateMatching;
       verified = v;
       applications = new Map(apps.map((a) => [a.jobId, a]));
     }
@@ -361,7 +379,8 @@ async function listActiveJobs(req, res) {
       jobs.map(({ jobSkills, ...job }) => {
         const item = { ...job, skills: formatSkills(jobSkills) };
         if (isCandidate) {
-          const match = matchPercent(jobSkills, verified);
+          // Left out when the job has no required/preferred skills or matching is turned off.
+          const match = matching ? matchPercent(jobSkills, verified) : undefined;
           if (match !== undefined) item.match = match;
           const app = applications.get(job.id);
           item.hasApplied = app?.status === "Applied";
