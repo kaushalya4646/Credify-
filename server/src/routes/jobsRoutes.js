@@ -19,6 +19,7 @@ const candidate = [requireAuth, requireRole("CANDIDATE")];
 
 // Fixed paths first so they aren't taken as a job id by "/:id".
 router.get("/", requireAuth, listActiveJobs);
+router.get("/browse", requireAuth, listActiveJobs);
 router.get("/mine", ...recruiter, listMyJobs);
 router.post("/", ...recruiter, createJob);
 router.put("/applications/:applicationId/withdraw", ...candidate, withdrawApplication);

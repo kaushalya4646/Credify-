@@ -344,13 +344,17 @@ async function getJobById(req, res) {
   }
 }
 
-// GET /api/jobs?title=&city=&country= — open jobs only.
+// GET /api/jobs (or /api/jobs/browse)?title=&city=&country=&location= — open jobs only.
+// location matches either the city or the country.
 async function listActiveJobs(req, res) {
   try {
     const contains = (v) => ({ contains: v.trim(), mode: "insensitive" });
     const where = { status: "Active", deadline: { gt: new Date() } };
     for (const f of ["title", "city", "country"]) {
       if (typeof req.query[f] === "string" && req.query[f].trim()) where[f] = contains(req.query[f]);
+    }
+    if (typeof req.query.location === "string" && req.query.location.trim()) {
+      where.OR = [{ city: contains(req.query.location) }, { country: contains(req.query.location) }];
     }
 
     const jobs = await prisma.job.findMany({

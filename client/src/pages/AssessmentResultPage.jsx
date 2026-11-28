@@ -7,6 +7,7 @@ const navItems = [
   { label: "Dashboard", to: "/candidate/dashboard" },
   { label: "Career Role", to: "/candidate/career-role" },
   { label: "Skill Gaps", to: "/candidate/skill-gaps" },
+  { label: "Browse Jobs", to: "/candidate/jobs" },
   { label: "My Profile", to: "/candidate/profile" },
 ];
 

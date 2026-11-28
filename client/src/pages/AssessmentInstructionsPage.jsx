@@ -7,6 +7,7 @@ const navItems = [
   { label: 'Career Role', path: '/candidate/career-role' },
   { label: 'Assessments', path: '/candidate/assessments' },
   { label: 'Skill Gaps', path: '/candidate/skill-gaps' },
+  { label: 'Browse Jobs', path: '/candidate/jobs' },
   { label: 'My Profile', path: '/candidate/profile' },
 ]
 

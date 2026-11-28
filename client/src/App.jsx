@@ -9,6 +9,7 @@ import CareerRolePage from './pages/CareerRolePage'
 import AssessmentsPage from './pages/AssessmentsPage'
 import AssessmentResultPage from './pages/AssessmentResultPage'
 import SkillGapsPage from './pages/SkillGapsPage'
+import BrowseJobsPage from './pages/BrowseJobsPage'
 import AssessmentScreenPage from './pages/AssessmentScreenPage'
 
 import RecruiterDashboardPage from './pages/RecruiterDashboardPage'
@@ -74,6 +75,7 @@ export default function App() {
       <Route path="/candidate/assessments" element={<ProtectedRoute role="CANDIDATE"><AssessmentsPage /></ProtectedRoute>} />
       <Route path="/candidate/assessments/results/:attemptId" element={<ProtectedRoute role="CANDIDATE"><AssessmentResultPage /></ProtectedRoute>} />
       <Route path="/candidate/skill-gaps" element={<ProtectedRoute role="CANDIDATE"><SkillGapsPage /></ProtectedRoute>} />
+      <Route path="/candidate/jobs" element={<ProtectedRoute role="CANDIDATE"><BrowseJobsPage /></ProtectedRoute>} />
       <Route path="/candidate/assessments/:id/screen" element={<ProtectedRoute role="CANDIDATE"><AssessmentScreenPage /></ProtectedRoute>} />
 
       <Route path="/recruiter/dashboard" element={<ProtectedRoute role="RECRUITER"><RecruiterDashboardPage /></ProtectedRoute>} />
