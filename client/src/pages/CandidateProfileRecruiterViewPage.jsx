@@ -267,7 +267,21 @@ export default function CandidateProfileRecruiterViewPage() {
                           onChange={(saved) => setProfile((p) => ({ ...p, saved }))}
                           className="px-5 py-2 rounded-xl text-sm font-semibold"
                         />
-                        <button className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">Contact candidate</button>
+                        {/* Email only. If this candidate is saved, also mark them contacted
+                            in the background; the email app opens either way. */}
+                        <a
+                          href={`mailto:${profile.user.email}`}
+                          onClick={() => {
+                            if (!profile.saved) return
+                            api
+                              .post(`/api/saved-candidates/${profile.user.id}/contacted`)
+                              .catch((err) => console.error('Failed to mark as contacted:', err))
+                          }}
+                          title={`Email ${profile.user.email}`}
+                          className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark"
+                        >
+                          Contact candidate
+                        </a>
                       </div>
                     </div>
                   </div>
