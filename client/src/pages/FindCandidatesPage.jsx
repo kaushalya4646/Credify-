@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
 import { api } from "../api/client";
+import SaveCandidateButton from "../components/SaveCandidateButton";
 
 const navItems = [
   { label: "Dashboard", path: "/recruiter/dashboard" },
@@ -254,6 +255,10 @@ export default function FindCandidatesPage() {
   }
 
   const [bestMatch, ...otherCandidates] = candidates;
+
+  function setSaved(userId, saved) {
+    setCandidates((list) => list.map((c) => (c.user.id === userId ? { ...c, saved } : c)));
+  }
 
   // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -616,6 +621,12 @@ export default function FindCandidatesPage() {
                 >
                   View full profile
                 </Link>
+                <SaveCandidateButton
+                  candidateUserId={bestMatch.user.id}
+                  saved={bestMatch.saved}
+                  onChange={(saved) => setSaved(bestMatch.user.id, saved)}
+                  className="w-full h-full px-5 py-3.5 rounded-xl font-semibold text-sm"
+                />
                 {otherCandidates.length > 0 && (
                   <button
                     onClick={() => setExploreOpen(true)}
@@ -685,6 +696,12 @@ export default function FindCandidatesPage() {
                       <p className="text-[11px] text-slate-500">Match</p>
                     </div>
                   )}
+                  <SaveCandidateButton
+                    candidateUserId={c.user.id}
+                    saved={c.saved}
+                    onChange={(saved) => setSaved(c.user.id, saved)}
+                    className="px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap"
+                  />
                   <Link
                     to={`/recruiter/candidates/${c.user.id}`}
                     onClick={() => setExploreOpen(false)}

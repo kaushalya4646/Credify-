@@ -32,6 +32,8 @@ model User {
   skillVerifications  SkillVerification[]
   postedJobs          Job[]
   applications        Application[]
+  savedCandidates     SavedCandidate[] @relation("RecruiterSaves")
+  savedByRecruiters   SavedCandidate[] @relation("CandidateSaves")
 }
   
 model CandidateProfile {
@@ -256,4 +258,18 @@ model Application {
   updatedAt       DateTime @default(now()) @updatedAt
 
   @@unique([jobId, candidateUserId])
+}
+
+// A candidate bookmarked by a recruiter. Only a bookmark, so it goes with
+// either account if that account is deleted.
+model SavedCandidate {
+  id              String    @id @default(uuid())
+  recruiterId     String
+  recruiter       User      @relation("RecruiterSaves", fields: [recruiterId], references: [id], onDelete: Cascade)
+  candidateUserId String
+  candidate       User      @relation("CandidateSaves", fields: [candidateUserId], references: [id], onDelete: Cascade)
+  savedAt         DateTime  @default(now())
+  contactedAt     DateTime?
+
+  @@unique([recruiterId, candidateUserId])
 }

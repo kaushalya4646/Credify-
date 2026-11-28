@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { useState, useRef, useEffect } from 'react'
 import LogoutLink from "../components/LogoutLink";
 import { api } from '../api/client'
+import SaveCandidateButton from '../components/SaveCandidateButton'
 
 const navItems = [
   { label: 'Dashboard', path: '/recruiter/dashboard' },
@@ -260,7 +261,12 @@ export default function CandidateProfileRecruiterViewPage() {
                       </div>
                       <p className="text-slate-500 mb-3">{profile.targetCareerRole?.name || 'No target role selected'}</p>
                       <div className="flex gap-3">
-                        <button className="px-5 py-2 rounded-xl bg-blue-50 border border-blue-100 text-primary text-sm font-semibold">Save candidate</button>
+                        <SaveCandidateButton
+                          candidateUserId={profile.user.id}
+                          saved={profile.saved}
+                          onChange={(saved) => setProfile((p) => ({ ...p, saved }))}
+                          className="px-5 py-2 rounded-xl text-sm font-semibold"
+                        />
                         <button className="px-5 py-2 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-dark">Contact candidate</button>
                       </div>
                     </div>

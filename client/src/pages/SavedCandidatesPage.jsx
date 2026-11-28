@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
 
 const navItems = [
   { label: "Dashboard", path: "/recruiter/dashboard" },
@@ -99,127 +100,75 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-// TODO (backend step): replace with the recruiter's real saved candidates from the API.
-const savedCandidates = [
-  {
-    initials: "CS",
-    name: "Chethina Sri",
-    role: "Backend Developer",
-    location: "Colombo",
-    experience: "2 years experience",
-    experienceYears: 2,
-    match: 92,
-    skills: ["Java", "SQL", "REST APIs"],
-    score: 96,
-    saved: "Aug 15, 2026",
-    verified: true,
-    email: "chethina.sri@example.com",
-    phone: "+94 77 123 4567",
-  },
-  {
-    initials: "MK",
-    name: "M Kaushalya",
-    role: "Software Engineer",
-    location: "Kandy",
-    experience: "3 years experience",
-    experienceYears: 3,
-    match: 86,
-    skills: ["JavaScript", "MongoDB", "React"],
-    score: 82,
-    saved: "Sep 23, 2026",
-    verified: true,
-    email: "m.kaushalya@example.com",
-    phone: "+94 71 234 5678",
-  },
-  {
-    initials: "RK",
-    name: "R Kushan",
-    role: "Software Engineer",
-    location: "Negombo",
-    experience: "4 years experience",
-    experienceYears: 4,
-    match: 81,
-    skills: ["Python", "SQL", "Git", "Django"],
-    score: 79,
-    saved: "Aug 03, 2026",
-    verified: false,
-    email: "r.kushan@example.com",
-    phone: "+94 76 345 6789",
-  },
-];
-
-const careerRoleOptions = [
-  "All",
-  ...new Set(savedCandidates.map((c) => c.role)),
-];
-const skillOptions = [
-  "All",
-  ...new Set(savedCandidates.flatMap((c) => c.skills)),
-];
+// Filter options: value = the API's query value.
 const matchOptions = [
-  "All",
-  "90% and above",
-  "80%–89%",
-  "70%–79%",
-  "Below 70%",
+  ["90+", "90% and above"],
+  ["80-89", "80%–89%"],
+  ["70-79", "70%–79%"],
+  ["below70", "Below 70%"],
 ];
 const experienceOptions = [
-  "All",
-  "0–1 years",
-  "2–3 years",
-  "4–5 years",
-  "5+ years",
+  ["0-1", "0–1 years"],
+  ["2-3", "2–3 years"],
+  ["4-5", "4–5 years"],
+  ["5+", "5+ years"],
 ];
-const verificationOptions = ["All", "Verified", "Not verified"];
+const verificationOptions = [
+  ["verified", "Verified"],
+  ["notVerified", "Not verified"],
+];
 const dateSavedOptions = [
-  "All",
-  ...new Set(savedCandidates.map((c) => c.saved)),
+  ["today", "Today"],
+  ["thisWeek", "This week"],
+  ["thisMonth", "This month"],
+];
+const sortOptions = [
+  ["recentlySaved", "Recently saved"],
+  ["highestMatch", "Highest match"],
+  ["nameAsc", "Name A–Z"],
 ];
 
 const defaultFilters = {
-  careerRole: "All",
-  skill: "All",
-  match: "All",
-  experience: "All",
-  verification: "All",
-  dateSaved: "All",
+  careerRole: "",
+  skill: "",
+  matchBucket: "",
+  experienceBucket: "",
+  verification: "",
+  dateSavedBucket: "",
 };
 
-function matchesFilters(c, filters) {
-  if (filters.careerRole !== "All" && c.role !== filters.careerRole)
-    return false;
-  if (filters.skill !== "All" && !c.skills.includes(filters.skill))
-    return false;
-  if (filters.verification !== "All") {
-    const wantsVerified = filters.verification === "Verified";
-    if (c.verified !== wantsVerified) return false;
-  }
-  if (filters.dateSaved !== "All" && c.saved !== filters.dateSaved)
-    return false;
-  if (filters.match !== "All") {
-    if (filters.match === "90% and above" && c.match < 90) return false;
-    if (filters.match === "80%–89%" && (c.match < 80 || c.match > 89))
-      return false;
-    if (filters.match === "70%–79%" && (c.match < 70 || c.match > 79))
-      return false;
-    if (filters.match === "Below 70%" && c.match >= 70) return false;
-  }
-  if (filters.experience !== "All") {
-    const y = c.experienceYears;
-    if (filters.experience === "0–1 years" && !(y >= 0 && y <= 1)) return false;
-    if (filters.experience === "2–3 years" && !(y >= 2 && y <= 3)) return false;
-    if (filters.experience === "4–5 years" && !(y >= 4 && y <= 5)) return false;
-    if (filters.experience === "5+ years" && !(y > 5)) return false;
-  }
-  return true;
+function initials(name) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join("");
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function experienceText(years) {
+  if (years == null) return "Experience not given";
+  return `${years} year${years === 1 ? "" : "s"} experience`;
 }
 
 export default function SavedCandidatesPage() {
   const [searchText, setSearchText] = useState("");
+  const [sort, setSort] = useState("recentlySaved");
   const [view, setView] = useState("card");
   const [filters, setFilters] = useState(defaultFilters);
+  const [careerRoles, setCareerRoles] = useState([]);
+  const [skills, setSkills] = useState([]);
+  const [candidates, setCandidates] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [contactCandidate, setContactCandidate] = useState(null);
-  const [notificationSent, setNotificationSent] = useState(false);
+  const latestRequest = useRef(0);
 
   // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -239,22 +188,73 @@ export default function SavedCandidatesPage() {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
+  // Filter dropdown options: the real career roles and skills.
+  useEffect(() => {
+    api.get("/api/career-roles")
+      .then((list) => setCareerRoles([...(list || [])].sort((a, b) => a.name.localeCompare(b.name))))
+      .catch((err) => console.error("Failed to load career roles:", err));
+    api.get("/api/skills")
+      .then((list) => setSkills((list || []).filter((s) => s.status === "Active").sort((a, b) => a.name.localeCompare(b.name))))
+      .catch((err) => console.error("Failed to load skills:", err));
+  }, []);
+
+  async function load() {
+    const requestId = ++latestRequest.current;
+    const params = new URLSearchParams({ sort });
+    if (searchText.trim()) params.set("q", searchText.trim());
+    for (const [k, v] of Object.entries(filters)) if (v) params.set(k, v);
+    try {
+      const data = await api.get(`/api/saved-candidates?${params}`);
+      if (requestId !== latestRequest.current) return; // a newer request is on its way
+      setCandidates(data.candidates);
+      setStats(data.stats);
+      setError("");
+    } catch (err) {
+      if (requestId !== latestRequest.current) return;
+      setError(err.message || "Could not load saved candidates.");
+    } finally {
+      if (requestId === latestRequest.current) setLoading(false);
+    }
+  }
+
+  // Refetch whenever the search (debounced), sort or a filter changes.
+  useEffect(() => {
+    const timer = setTimeout(load, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchText, sort, filters]);
+
   function updateFilter(field, value) {
     setFilters((prev) => ({ ...prev, [field]: value }));
   }
 
   function clearFilters() {
     setFilters(defaultFilters);
+    setSearchText("");
+    setSort("recentlySaved");
   }
 
-  function openContact(candidate) {
-    setNotificationSent(false);
-    setContactCandidate(candidate);
+  async function removeSaved(c) {
+    setActionError("");
+    // Gone from the list straight away; the counts refresh after the server confirms.
+    setCandidates((list) => list.filter((x) => x.candidateUserId !== c.candidateUserId));
+    try {
+      await api.delete(`/api/saved-candidates/${c.candidateUserId}`);
+    } catch (err) {
+      setActionError(err.message || `Could not remove ${c.user.name}.`);
+    }
+    load();
   }
 
-  const filtered = savedCandidates
-    .filter((c) => c.name.toLowerCase().includes(searchText.toLowerCase()))
-    .filter((c) => matchesFilters(c, filters));
+  // Runs alongside the mailto link opening; never blocks it.
+  function markContacted(c) {
+    api
+      .post(`/api/saved-candidates/${c.candidateUserId}/contacted`)
+      .then(load)
+      .catch((err) => console.error("Failed to mark as contacted:", err));
+  }
+
+  const anyFilter = Boolean(searchText.trim()) || Object.values(filters).some(Boolean);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -443,30 +443,18 @@ export default function SavedCandidatesPage() {
 
         <main className="p-10 space-y-6">
           <div className="grid grid-cols-4 gap-6">
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-sm text-slate-500 mb-2">Saved Candidates</p>
-              <p className="text-3xl font-bold text-slate-900">48</p>
-              <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                ↑ 12%
-              </span>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-sm text-slate-500 mb-2">High Match</p>
-              <p className="text-3xl font-bold text-slate-900">18</p>
-              <p className="text-xs text-slate-500 mt-2">of 48 saved</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-sm text-slate-500 mb-2">Recently Added</p>
-              <p className="text-3xl font-bold text-slate-900">7</p>
-              <p className="text-xs text-slate-500 mt-2">this week</p>
-            </div>
-            <div className="bg-white rounded-2xl border border-slate-200 p-6">
-              <p className="text-sm text-slate-500 mb-2">Contacted</p>
-              <p className="text-3xl font-bold text-slate-900">12</p>
-              <span className="inline-block mt-2 px-2.5 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
-                ↑ 9%
-              </span>
-            </div>
+            {[
+              ["Saved Candidates", stats?.total, "in your saved list"],
+              ["High Match", stats?.highMatch, stats && stats.highMatch == null ? "Candidate matching is off" : "80% match or above"],
+              ["Recently Added", stats?.recentlyAdded, "in the last 7 days"],
+              ["Contacted", stats?.contacted, "emailed from Credify"],
+            ].map(([label, value, sub]) => (
+              <div key={label} className="bg-white rounded-2xl border border-slate-200 p-6">
+                <p className="text-sm text-slate-500 mb-2">{label}</p>
+                <p className="text-3xl font-bold text-slate-900">{value ?? "—"}</p>
+                <p className="text-xs text-slate-500 mt-2">{sub}</p>
+              </div>
+            ))}
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200 p-6">
@@ -474,23 +462,31 @@ export default function SavedCandidatesPage() {
               <input
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                placeholder="Search for candidates"
+                placeholder="Search by name, career role or skill"
+                aria-label="Search saved candidates"
                 className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
               />
-              <select className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm">
-                <option>Recently saved</option>
-                <option>Highest match</option>
-                <option>Name A–Z</option>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                aria-label="Sort"
+                className="px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
+              >
+                {sortOptions.map(([v, label]) => (
+                  <option key={v} value={v}>{label}</option>
+                ))}
               </select>
               <div className="flex rounded-xl border border-slate-300 overflow-hidden">
                 <button
                   onClick={() => setView("card")}
+                  aria-pressed={view === "card"}
                   className={`px-4 py-2.5 text-sm font-semibold ${view === "card" ? "bg-blue-50 text-primary" : "text-slate-600"}`}
                 >
                   Card view
                 </button>
                 <button
                   onClick={() => setView("list")}
+                  aria-pressed={view === "list"}
                   className={`px-4 py-2.5 text-sm font-semibold ${view === "list" ? "bg-blue-50 text-primary" : "text-slate-600"}`}
                 >
                   List view
@@ -500,72 +496,27 @@ export default function SavedCandidatesPage() {
 
             <div className="flex items-center justify-between mb-6 border-t border-slate-100 pt-5">
               <div className="flex gap-3 flex-wrap">
-                <select
-                  value={filters.careerRole}
-                  onChange={(e) => updateFilter("careerRole", e.target.value)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-sm text-slate-700"
-                >
-                  {careerRoleOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o === "All" ? "Career role" : o}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.skill}
-                  onChange={(e) => updateFilter("skill", e.target.value)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-sm text-slate-700"
-                >
-                  {skillOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o === "All" ? "Skill" : o}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.match}
-                  onChange={(e) => updateFilter("match", e.target.value)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-sm text-slate-700"
-                >
-                  {matchOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o === "All" ? "Match percentage" : o}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.experience}
-                  onChange={(e) => updateFilter("experience", e.target.value)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-sm text-slate-700"
-                >
-                  {experienceOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o === "All" ? "Experience" : o}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.verification}
-                  onChange={(e) => updateFilter("verification", e.target.value)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-sm text-slate-700"
-                >
-                  {verificationOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o === "All" ? "Verification status" : o}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.dateSaved}
-                  onChange={(e) => updateFilter("dateSaved", e.target.value)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-sm text-slate-700"
-                >
-                  {dateSavedOptions.map((o) => (
-                    <option key={o} value={o}>
-                      {o === "All" ? "Date saved" : o}
-                    </option>
-                  ))}
-                </select>
+                {[
+                  ["careerRole", "Career role", careerRoles.map((r) => [r.id, r.name])],
+                  ["skill", "Skill", skills.map((s) => [s.id, s.name])],
+                  ["matchBucket", "Match percentage", matchOptions],
+                  ["experienceBucket", "Experience", experienceOptions],
+                  ["verification", "Verification status", verificationOptions],
+                  ["dateSavedBucket", "Date saved", dateSavedOptions],
+                ].map(([field, label, options]) => (
+                  <select
+                    key={field}
+                    value={filters[field]}
+                    onChange={(e) => updateFilter(field, e.target.value)}
+                    aria-label={label}
+                    className="px-4 py-2 rounded-xl border border-slate-300 text-sm text-slate-700"
+                  >
+                    <option value="">{field === "dateSavedBucket" ? "Date saved: All time" : label}</option>
+                    {options.map(([v, text]) => (
+                      <option key={v} value={v}>{text}</option>
+                    ))}
+                  </select>
+                ))}
               </div>
               <button
                 onClick={clearFilters}
@@ -575,69 +526,97 @@ export default function SavedCandidatesPage() {
               </button>
             </div>
 
-            {filtered.length === 0 && (
-              <p className="text-center text-sm text-slate-500 py-10">
-                No saved candidates match these filters.
+            {actionError && (
+              <p role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {actionError}
               </p>
             )}
 
-            {view === "card" ? (
+            {loading ? (
+              <p className="text-center text-sm text-slate-500 py-10">Loading saved candidates…</p>
+            ) : error ? (
+              <p className="text-center text-sm text-red-600 py-10">{error}</p>
+            ) : candidates.length === 0 ? (
+              stats?.total === 0 && !anyFilter ? (
+                <div className="text-center py-10 space-y-3">
+                  <p className="text-sm text-slate-500">You haven't saved any candidates yet.</p>
+                  <Link to="/recruiter/find-candidates" className="text-sm font-semibold text-primary hover:underline">
+                    Find candidates to save
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-center text-sm text-slate-500 py-10">
+                  No saved candidates match these filters.
+                </p>
+              )
+            ) : view === "card" ? (
               <div className="grid grid-cols-3 gap-6">
-                {filtered.map((c) => (
+                {candidates.map((c) => (
                   <div
-                    key={c.name}
-                    className="border border-slate-200 rounded-2xl p-5"
+                    key={c.candidateUserId}
+                    data-candidate-id={c.candidateUserId}
+                    className="border border-slate-200 rounded-2xl p-5 flex flex-col"
                   >
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center font-semibold text-primary">
-                        {c.initials}
+                      <div className="w-12 h-12 shrink-0 rounded-full bg-blue-50 flex items-center justify-center font-semibold text-primary">
+                        {initials(c.user.name)}
                       </div>
-                      <div>
-                        <p className="font-semibold text-slate-900">{c.name}</p>
-                        <p className="text-xs text-slate-500">{c.role}</p>
+                      <div className="min-w-0 flex-1">
+                        <Link to={`/recruiter/candidates/${c.candidateUserId}`} className="font-semibold text-slate-900 hover:text-primary">
+                          {c.user.name}
+                        </Link>
+                        <p className="text-xs text-slate-500">{c.targetCareerRole?.name || "No target role selected"}</p>
                       </div>
+                      {"match" in c && c.match != null && (
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-green-700">{c.match}%</p>
+                          <p className="text-[11px] text-slate-500">Match</p>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-sm text-slate-700 mb-1">
-                      📍 {c.location}
-                    </p>
-                    <p className="text-sm text-slate-700 mb-3">
-                      📅 {c.experience}
-                    </p>
+                    <p className="text-sm text-slate-700 mb-3">📅 {experienceText(c.experienceYears)}</p>
                     {c.verified && (
-                      <span className="inline-block mb-3 px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                      <span className="self-start mb-3 px-3 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
                         ✓ Verified Profile
                       </span>
                     )}
                     <div className="border-t border-slate-100 pt-3 mb-3">
                       <p className="text-xs text-slate-500 mb-2">Top skills</p>
-                      <div className="flex gap-2 flex-wrap">
-                        {c.skills.map((s) => (
-                          <span
-                            key={s}
-                            className="px-2.5 py-1 rounded-full bg-blue-50 text-primary text-xs font-medium"
-                          >
-                            {s}
-                          </span>
-                        ))}
-                      </div>
+                      {c.topSkills.length > 0 ? (
+                        <div className="flex gap-2 flex-wrap">
+                          {c.topSkills.slice(0, 4).map((s) => (
+                            <span key={s} className="px-2.5 py-1 rounded-full bg-blue-50 text-primary text-xs font-medium">
+                              {s}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400">No verified skills yet</p>
+                      )}
                     </div>
                     <div className="flex items-center justify-between text-sm mb-1 border-t border-slate-100 pt-3">
-                      <span className="text-slate-500">Assessment score</span>
+                      <span className="text-slate-500">
+                        Latest assessment{c.latestAssessment ? ` (${c.latestAssessment.skillName})` : ""}
+                      </span>
                       <span className="font-bold text-slate-900">
-                        {c.score}%
+                        {c.latestAssessment ? `${c.latestAssessment.score}%` : "—"}
                       </span>
                     </div>
+                    <p className="text-xs text-slate-500">Saved {formatDate(c.savedAt)}</p>
                     <p className="text-xs text-slate-500 mb-3">
-                      Saved {c.saved}
+                      {c.contactedAt ? `Contacted ${formatDate(c.contactedAt)}` : "Not contacted yet"}
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mt-auto">
                       <button
-                        onClick={() => openContact(c)}
+                        onClick={() => setContactCandidate(c)}
                         className="flex-1 py-2 rounded-xl border border-primary text-primary text-sm font-semibold"
                       >
                         Contact
                       </button>
-                      <button className="flex-1 py-2 rounded-xl border border-slate-300 text-slate-700 text-sm font-semibold">
+                      <button
+                        onClick={() => removeSaved(c)}
+                        className="flex-1 py-2 rounded-xl border border-slate-300 text-slate-700 text-sm font-semibold"
+                      >
                         Remove saved
                       </button>
                     </div>
@@ -646,38 +625,34 @@ export default function SavedCandidatesPage() {
               </div>
             ) : (
               <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden">
-                {filtered.map((c) => (
-                  <div key={c.name} className="flex items-center gap-4 p-4">
+                {candidates.map((c) => (
+                  <div key={c.candidateUserId} data-candidate-id={c.candidateUserId} className="flex items-center gap-4 p-4">
                     <div className="w-11 h-11 shrink-0 rounded-full bg-blue-50 flex items-center justify-center font-semibold text-primary">
-                      {c.initials}
+                      {initials(c.user.name)}
                     </div>
                     <div className="w-48 shrink-0">
-                      <p className="font-semibold text-slate-900 text-sm">
-                        {c.name}
-                      </p>
-                      <p className="text-xs text-slate-500">{c.role}</p>
+                      <Link to={`/recruiter/candidates/${c.candidateUserId}`} className="font-semibold text-slate-900 text-sm hover:text-primary">
+                        {c.user.name}
+                      </Link>
+                      <p className="text-xs text-slate-500">{c.targetCareerRole?.name || "No target role selected"}</p>
                     </div>
-                    <p className="text-sm text-slate-600 w-28 shrink-0">
-                      📍 {c.location}
-                    </p>
-                    <p className="text-sm text-slate-600 w-32 shrink-0">
-                      {c.experience}
-                    </p>
+                    <p className="text-sm text-slate-600 w-36 shrink-0">{experienceText(c.experienceYears)}</p>
                     <div className="flex gap-1.5 flex-wrap flex-1 min-w-0">
-                      {c.skills.map((s) => (
-                        <span
-                          key={s}
-                          className="px-2.5 py-1 rounded-full bg-blue-50 text-primary text-xs font-medium"
-                        >
+                      {c.topSkills.slice(0, 4).map((s) => (
+                        <span key={s} className="px-2.5 py-1 rounded-full bg-blue-50 text-primary text-xs font-medium">
                           {s}
                         </span>
                       ))}
                     </div>
+                    {"match" in c && (
+                      <div className="text-center w-16 shrink-0">
+                        <p className="font-bold text-green-700 text-sm">{c.match != null ? `${c.match}%` : ""}</p>
+                        <p className="text-[11px] text-slate-500">{c.match != null ? "Match" : ""}</p>
+                      </div>
+                    )}
                     <div className="text-center w-20 shrink-0">
-                      <p className="font-bold text-slate-900 text-sm">
-                        {c.score}%
-                      </p>
-                      <p className="text-[11px] text-slate-500">Score</p>
+                      <p className="font-bold text-slate-900 text-sm">{c.latestAssessment ? `${c.latestAssessment.score}%` : "—"}</p>
+                      <p className="text-[11px] text-slate-500">Latest score</p>
                     </div>
                     {c.verified && (
                       <span className="shrink-0 px-2.5 py-1 rounded-full bg-green-50 text-green-700 text-xs font-medium">
@@ -686,12 +661,15 @@ export default function SavedCandidatesPage() {
                     )}
                     <div className="flex gap-2 shrink-0">
                       <button
-                        onClick={() => openContact(c)}
+                        onClick={() => setContactCandidate(c)}
                         className="px-4 py-2 rounded-lg border border-primary text-primary text-xs font-semibold"
                       >
                         Contact
                       </button>
-                      <button className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold">
+                      <button
+                        onClick={() => removeSaved(c)}
+                        className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold"
+                      >
                         Remove
                       </button>
                     </div>
@@ -703,63 +681,28 @@ export default function SavedCandidatesPage() {
         </main>
       </div>
 
-      {/* Contact candidate modal */}
+      {/* Contact candidate modal: email only. */}
       {contactCandidate && (
         <Modal
-          title={`Contact ${contactCandidate.name}`}
+          title={`Contact ${contactCandidate.user.name}`}
           onClose={() => setContactCandidate(null)}
         >
-          <div className="space-y-3">
-            <a
-              href={`tel:${contactCandidate.phone}`}
-              className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:bg-slate-50"
-            >
-              <span className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary">
-                📞
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Call</p>
-                <p className="text-xs text-slate-500">
-                  {contactCandidate.phone}
-                </p>
-              </div>
-            </a>
-
-            <a
-              href={`mailto:${contactCandidate.email}`}
-              className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:bg-slate-50"
-            >
-              <span className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary">
-                ✉️
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">Email</p>
-                <p className="text-xs text-slate-500">
-                  {contactCandidate.email}
-                </p>
-              </div>
-            </a>
-
-            <button
-              type="button"
-              onClick={() => setNotificationSent(true)}
-              className="w-full flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-left"
-            >
-              <span className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary">
-                🔔
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">
-                  Send platform notification
-                </p>
-                <p className="text-xs text-slate-500">
-                  {notificationSent
-                    ? "Notification sent ✓"
-                    : `Notify ${contactCandidate.name} inside Credify`}
-                </p>
-              </div>
-            </button>
-          </div>
+          <a
+            href={`mailto:${contactCandidate.user.email}`}
+            onClick={() => markContacted(contactCandidate)}
+            className="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:bg-slate-50"
+          >
+            <span className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-primary">
+              ✉️
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Email</p>
+              <p className="text-xs text-slate-500">{contactCandidate.user.email}</p>
+            </div>
+          </a>
+          <p className="mt-3 text-xs text-slate-500">
+            Opens your email app. The candidate is marked as contacted.
+          </p>
         </Modal>
       )}
     </div>

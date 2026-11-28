@@ -72,7 +72,12 @@ async function searchCandidates(req, res) {
       },
     });
 
-    const matching = (await getSettings()).candidateMatching;
+    const [settings, savedRows] = await Promise.all([
+      getSettings(),
+      prisma.savedCandidate.findMany({ where: { recruiterId: req.user.userId }, select: { candidateUserId: true } }),
+    ]);
+    const matching = settings.candidateMatching;
+    const savedIds = new Set(savedRows.map((r) => r.candidateUserId));
     const candidates = profiles.map((p) => {
       const verified = p.user.skillVerifications;
       return {
@@ -84,6 +89,7 @@ async function searchCandidates(req, res) {
         // Left out entirely when candidate matching is turned off.
         ...(matching ? { match: computeMatch(p.targetCareerRole, verified.map((v) => v.skillId)) } : {}),
         verifiedSkills: verified.map((v) => v.skill.name),
+        saved: savedIds.has(p.user.id), // in this recruiter's saved candidates
       };
     });
 
@@ -155,6 +161,13 @@ async function getCandidateProfile(req, res) {
       ...((await getSettings()).candidateMatching
         ? { match: computeMatch(profile.targetCareerRole, verifiedSkillIds) }
         : {}),
+      // Whether this recruiter has saved the candidate.
+      saved:
+        req.user.role === "RECRUITER" &&
+        !!(await prisma.savedCandidate.findUnique({
+          where: { recruiterId_candidateUserId: { recruiterId: req.user.userId, candidateUserId: id } },
+          select: { id: true },
+        })),
     });
   } catch (err) {
     console.error(err);
@@ -162,4 +175,4 @@ async function getCandidateProfile(req, res) {
   }
 }
 
-module.exports = { searchCandidates, getCandidateProfile };
+module.exports = { searchCandidates, getCandidateProfile, computeMatch };

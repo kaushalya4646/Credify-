@@ -10,6 +10,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const candidatesRoutes = require("./routes/candidatesRoutes");
 const settingsRoutes = require("./routes/settingsRoutes");
 const jobsRoutes = require("./routes/jobsRoutes");
+const savedCandidatesRoutes = require("./routes/savedCandidatesRoutes");
 
 const app = express();
 
@@ -30,5 +31,6 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/candidates", candidatesRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/jobs", jobsRoutes);
+app.use("/api/saved-candidates", savedCandidatesRoutes);
 
 module.exports = app;
