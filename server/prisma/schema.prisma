@@ -30,6 +30,8 @@ model User {
   recruiterProfile RecruiterProfile?
   attempts            AssessmentAttempt[]
   skillVerifications  SkillVerification[]
+  postedJobs          Job[]
+  applications        Application[]
 }
   
 model CandidateProfile {
@@ -84,6 +86,7 @@ model Skill {
   careerRoles CareerRoleSkill[]
   assessments Assessment[]
   skillVerifications SkillVerification[]
+  jobSkills JobSkill[]
 }
 
 model CareerRole {
@@ -205,4 +208,52 @@ model Settings {
   candidateMatching            Boolean  @default(true)
   platformDisabled             Boolean  @default(false)
   updatedAt                    DateTime @default(now()) @updatedAt
+}
+
+// A job posted by a recruiter.
+model Job {
+  id                 String        @id @default(uuid())
+  recruiterId        String
+  recruiter          User          @relation(fields: [recruiterId], references: [id])
+  title              String
+  description        String
+  employmentType     String        // "full-time" | "part-time"
+  country            String
+  city               String
+  experienceRequired String?       // e.g. "2 years"
+  degree             String?
+  university         String?
+  currency           String        @default("LKR")
+  salaryLow          Int
+  salaryHigh         Int
+  deadline           DateTime
+  status             String        @default("Draft") // "Draft" | "Active" | "Closed"
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @default(now()) @updatedAt
+  jobSkills          JobSkill[]
+  applications       Application[]
+}
+
+model JobSkill {
+  id      String @id @default(uuid())
+  jobId   String
+  job     Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skillId String
+  skill   Skill  @relation(fields: [skillId], references: [id])
+  level   String // "required" | "preferred" | "optional"
+
+  @@unique([jobId, skillId])
+}
+
+model Application {
+  id              String   @id @default(uuid())
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id])
+  candidateUserId String
+  candidate       User     @relation(fields: [candidateUserId], references: [id])
+  status          String   @default("Applied") // "Applied" | "Withdrawn"
+  appliedAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  @@unique([jobId, candidateUserId])
 }
