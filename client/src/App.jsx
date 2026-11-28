@@ -79,6 +79,7 @@ export default function App() {
       <Route path="/recruiter/dashboard" element={<ProtectedRoute role="RECRUITER"><RecruiterDashboardPage /></ProtectedRoute>} />
       <Route path="/recruiter/find-candidates" element={<ProtectedRoute role="RECRUITER"><FindCandidatesPage /></ProtectedRoute>} />
       <Route path="/recruiter/jobs/create" element={<ProtectedRoute role="RECRUITER"><CreateJobVacancyPage /></ProtectedRoute>} />
+      <Route path="/recruiter/jobs/edit/:id" element={<ProtectedRoute role="RECRUITER"><CreateJobVacancyPage /></ProtectedRoute>} />
       <Route path="/recruiter/saved-candidates" element={<ProtectedRoute role="RECRUITER"><SavedCandidatesPage /></ProtectedRoute>} />
       <Route path="/recruiter/profile" element={<ProtectedRoute role="RECRUITER"><RecruiterProfilePage /></ProtectedRoute>} />
       <Route path="/recruiter/candidates/:id" element={<ProtectedRoute role="RECRUITER"><CandidateProfileRecruiterViewPage /></ProtectedRoute>} />

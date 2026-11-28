@@ -7,6 +7,7 @@ const navItems = [
   { label: "Dashboard", path: "/recruiter/dashboard" },
   { label: "Find Candidates", path: "/recruiter/find-candidates" },
   { label: "Create Jobs", path: "/recruiter/jobs/create" },
+  { label: "My Jobs", path: "/recruiter/jobs" },
   { label: "Saved Candidates", path: "/recruiter/saved-candidates" },
   { label: "My Profile", path: "/recruiter/profile" },
 ];

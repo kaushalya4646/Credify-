@@ -1,12 +1,15 @@
 // CreateJobVacancyPage.jsx
 import { useState, useRef, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import LogoutLink from "../components/LogoutLink";
+import { api } from "../api/client";
+import { useAuth } from "../context/AuthContext";
 
 const navItems = [
   { label: "Dashboard", path: "/recruiter/dashboard" },
   { label: "Find Candidates", path: "/recruiter/find-candidates" },
   { label: "Create Jobs", path: "/recruiter/jobs/create" },
+  { label: "My Jobs", path: "/recruiter/jobs" },
   { label: "Saved Candidates", path: "/recruiter/saved-candidates" },
   { label: "My Profile", path: "/recruiter/profile" },
 ];
@@ -52,7 +55,10 @@ function RecruiterSidebar() {
       </p>
       <nav className="flex-1 px-4 mt-4 space-y-1">
         {navItems.map((item) => {
-          const active = location.pathname === item.path;
+          // Editing a job counts as being in My Jobs.
+          const active =
+            location.pathname === item.path ||
+            (item.path === "/recruiter/jobs" && location.pathname.startsWith("/recruiter/jobs/edit/"));
           return (
             <Link
               key={item.path}
@@ -72,7 +78,7 @@ function RecruiterSidebar() {
   );
 }
 
-// TODO (backend step): replace these with real option lists from the API.
+// Convenience suggestions only; these fields are free text.
 const jobTitleOptions = [
   "Backend Developer",
   "Frontend Developer",
@@ -117,42 +123,51 @@ const degreeOptions = [
   "BSc in Information Systems",
   "MSc in Computer Science",
 ];
-const skillSuggestions = [
-  "Java",
-  "Python",
-  "SQL",
-  "REST APIs",
-  "React",
-  "Node.js",
-  "Docker",
-  "AWS",
-  "TypeScript",
-  "MongoDB",
-];
 const currencyOptions = ["LKR", "USD", "EUR", "GBP"];
 
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  employmentType: "full-time",
+  country: "",
+  city: "",
+  experience: "",
+  degree: "",
+  university: "",
+  currency: "LKR",
+  salaryLow: 50000,
+  salaryHigh: 150000,
+  deadline: "",
+};
+
+// ISO date -> "YYYY-MM-DD" in local time, for <input type="date">.
+function toDateInput(iso) {
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+// "YYYY-MM-DD" -> the end of that day (local time), so "today" is still a valid deadline.
+function fromDateInput(value) {
+  return value ? new Date(`${value}T23:59:59`).toISOString() : null;
+}
+
 export default function CreateJobVacancyPage() {
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    employmentType: "full-time",
-    country: "",
-    city: "",
-    experience: "",
-    degree: "",
-    university: "",
-    currency: "LKR",
-    salaryLow: 50000,
-    salaryHigh: 150000,
-    deadline: "",
-  });
-  const [skills, setSkills] = useState([
-    { name: "Java", level: "required" },
-    { name: "Python", level: "preferred" },
-    { name: "SQL", level: "required" },
-    { name: "REST APIs", level: "optional" },
-  ]);
+  const { id } = useParams();
+  const isEdit = Boolean(id);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [skills, setSkills] = useState([]); // { skillId, name, level }
   const [skillInput, setSkillInput] = useState("");
+  const [skillError, setSkillError] = useState("");
+  const [activeSkills, setActiveSkills] = useState([]);
+  const [jobStatus, setJobStatus] = useState(null); // edit mode: the job's current status
+  const [originalDeadline, setOriginalDeadline] = useState("");
+  const [loadState, setLoadState] = useState(isEdit ? "loading" : "ready"); // loading | ready | error
+  const [loadError, setLoadError] = useState("");
+  const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(null); // "draft" | "publish" | "save" | null
 
   // which header dropdown is open: 'help' | 'notifications' | 'profile' | null
   const [openMenu, setOpenMenu] = useState(null);
@@ -172,21 +187,91 @@ export default function CreateJobVacancyPage() {
     setOpenMenu((m) => (m === name ? null : name));
   }
 
+  // Skills a job can use: Active ones only (non-admins only get Active skills).
+  useEffect(() => {
+    api
+      .get("/api/skills")
+      .then((list) =>
+        setActiveSkills(
+          (list || []).filter((s) => s.status === "Active").sort((a, b) => a.name.localeCompare(b.name)),
+        ),
+      )
+      .catch((err) => console.error("Failed to load skills:", err));
+  }, []);
+
+  // Edit mode: load the job and prefill everything.
+  useEffect(() => {
+    if (!isEdit) return;
+    let cancelled = false;
+    setLoadState("loading");
+    api
+      .get(`/api/jobs/${id}`)
+      .then((job) => {
+        if (cancelled) return;
+        if (user && job.recruiterId !== user.id) {
+          setLoadError("You can only edit your own job postings.");
+          setLoadState("error");
+          return;
+        }
+        const deadline = toDateInput(job.deadline);
+        setForm({
+          title: job.title,
+          description: job.description,
+          employmentType: job.employmentType,
+          country: job.country,
+          city: job.city,
+          experience: job.experienceRequired ?? "",
+          degree: job.degree ?? "",
+          university: job.university ?? "",
+          currency: job.currency,
+          salaryLow: job.salaryLow,
+          salaryHigh: job.salaryHigh,
+          deadline,
+        });
+        setOriginalDeadline(deadline);
+        setSkills(job.skills.map((s) => ({ skillId: s.skillId, name: s.name, level: s.level })));
+        setJobStatus(job.status);
+        setLoadState("ready");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadError(err.message || "Could not load this job.");
+        setLoadState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isEdit, user]);
+
   const SALARY_MIN = 0;
   const SALARY_MAX = 500000;
   const SALARY_STEP = 5000;
 
   function updateField(field, value) {
+    setSubmitError("");
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
+  // Only real Active skills can be added (matched by name, ignoring case).
   function addSkill() {
-    if (!skillInput.trim()) return;
-    setSkills((prev) => [
-      ...prev,
-      { name: skillInput.trim(), level: "optional" },
-    ]);
+    const name = skillInput.trim();
+    if (!name) return;
+    const match = activeSkills.find((s) => s.name.toLowerCase() === name.toLowerCase());
+    if (!match) {
+      setSkillError(`"${name}" isn't an available skill. Choose one from the suggestions.`);
+      return;
+    }
+    if (skills.some((s) => s.skillId === match.id)) {
+      setSkillError(`${match.name} is already on this job.`);
+      return;
+    }
+    setSkills((prev) => [...prev, { skillId: match.id, name: match.name, level: "optional" }]);
     setSkillInput("");
+    setSkillError("");
+  }
+
+  function removeSkill(index) {
+    setSkills((prev) => prev.filter((_, i) => i !== index));
   }
 
   function setSkillLevel(index, level) {
@@ -205,10 +290,49 @@ export default function CreateJobVacancyPage() {
     updateField("salaryHigh", num);
   }
 
-  function handleSubmit(e) {
-    e.preventDefault();
-    // TODO: POST to /api/jobs with { ...form, skills }
-    console.log("Create job vacancy payload:", { ...form, skills });
+  function buildBody() {
+    const body = {
+      title: form.title,
+      description: form.description,
+      employmentType: form.employmentType,
+      country: form.country,
+      city: form.city,
+      experienceRequired: form.experience.trim() || null,
+      degree: form.degree.trim() || null,
+      university: form.university.trim() || null,
+      currency: form.currency,
+      salaryLow: form.salaryLow,
+      salaryHigh: form.salaryHigh,
+      skills: skills.map(({ skillId, level }) => ({ skillId, level })),
+    };
+    // When editing, an untouched deadline isn't re-sent, so a job whose
+    // deadline has passed can still have its other details corrected.
+    if (!isEdit || form.deadline !== originalDeadline) {
+      body.deadline = fromDateInput(form.deadline);
+    }
+    return body;
+  }
+
+  // action: "draft" (Save draft), "publish" (Publish job), "save" (edit an Active job)
+  async function submit(action) {
+    setSubmitError("");
+    setSubmitting(action);
+    let saved = false;
+    try {
+      if (!isEdit) {
+        await api.post("/api/jobs", { ...buildBody(), status: action === "publish" ? "Active" : "Draft" });
+      } else {
+        await api.put(`/api/jobs/${id}`, buildBody());
+        saved = true;
+        if (action === "publish") await api.post(`/api/jobs/${id}/publish`);
+      }
+      navigate("/recruiter/jobs");
+    } catch (err) {
+      const message = err.message || "Could not save the job.";
+      setSubmitError(saved ? `Your changes were saved, but the job couldn't be published: ${message}` : message);
+    } finally {
+      setSubmitting(null);
+    }
   }
 
   const lowPct =
@@ -223,10 +347,10 @@ export default function CreateJobVacancyPage() {
         <header className="bg-white border-b border-slate-200 px-10 py-7 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">
-              Create Job Vacancy
+              {isEdit ? "Edit Job Vacancy" : "Create Job Vacancy"}
             </h1>
             <p className="text-sm text-slate-500 mt-1">
-              Define the requirements for your new position
+              {isEdit ? "Update the details of this position" : "Define the requirements for your new position"}
             </p>
           </div>
           <div className="flex items-center gap-4" ref={menuRef}>
@@ -393,9 +517,31 @@ export default function CreateJobVacancyPage() {
           </div>
         </header>
 
+        {loadState !== "ready" ? (
+          <main className="p-10">
+            {loadState === "loading" ? (
+              <p className="py-10 text-center text-sm text-slate-500">Loading job…</p>
+            ) : (
+              <div className="py-10 text-center space-y-3">
+                <p className="text-sm text-red-600">{loadError}</p>
+                <Link to="/recruiter/jobs" className="text-sm font-semibold text-primary hover:underline">Back to My Jobs</Link>
+              </div>
+            )}
+          </main>
+        ) : (
         <main className="p-10 grid grid-cols-3 gap-6">
+          {submitError && (
+            <div role="alert" className="col-span-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {submitError}
+            </div>
+          )}
+          {isEdit && jobStatus === "Closed" && (
+            <div className="col-span-3 rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm text-slate-700">
+              This job is closed, so it can no longer be edited.
+            </div>
+          )}
           <form
-            onSubmit={handleSubmit}
+            onSubmit={(e) => e.preventDefault()}
             className="col-span-2 bg-white rounded-2xl border border-slate-200 p-6 space-y-6"
           >
             <h2 className="font-medium text-slate-900">Job information</h2>
@@ -545,7 +691,11 @@ export default function CreateJobVacancyPage() {
                 <input
                   list="skill-options"
                   value={skillInput}
-                  onChange={(e) => setSkillInput(e.target.value)}
+                  onChange={(e) => {
+                    setSkillInput(e.target.value);
+                    setSkillError("");
+                  }}
+                  aria-label="Add skill"
                   onKeyDown={(e) =>
                     e.key === "Enter" && (e.preventDefault(), addSkill())
                   }
@@ -553,8 +703,8 @@ export default function CreateJobVacancyPage() {
                   className="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 text-sm"
                 />
                 <datalist id="skill-options">
-                  {skillSuggestions.map((o) => (
-                    <option key={o} value={o} />
+                  {activeSkills.map((o) => (
+                    <option key={o.id} value={o.name} />
                   ))}
                 </datalist>
                 <button
@@ -565,13 +715,27 @@ export default function CreateJobVacancyPage() {
                   Add
                 </button>
               </div>
+              {skillError && (
+                <p role="alert" className="-mt-2 mb-4 text-xs text-red-600">{skillError}</p>
+              )}
+              {skills.length === 0 && (
+                <p className="text-sm text-slate-400">No skills added yet.</p>
+              )}
               <div className="space-y-3">
                 {skills.map((skill, i) => (
                   <div
-                    key={skill.name + i}
-                    className="flex items-center justify-between"
+                    key={skill.skillId}
+                    className="flex items-center justify-between gap-2"
                   >
-                    <span className="text-sm font-semibold text-slate-900">
+                    <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <button
+                        type="button"
+                        onClick={() => removeSkill(i)}
+                        aria-label={`Remove ${skill.name}`}
+                        className="text-slate-400 hover:text-red-600"
+                      >
+                        ✕
+                      </button>
                       {skill.name}
                     </span>
                     <div className="flex rounded-lg overflow-hidden border border-slate-200">
@@ -668,22 +832,38 @@ export default function CreateJobVacancyPage() {
               </div>
             </div>
 
-            <div className="flex gap-3">
+            {isEdit && jobStatus === "Closed" ? null : isEdit && jobStatus === "Active" ? (
               <button
                 type="button"
-                className="flex-1 py-3 rounded-xl border border-primary text-primary font-semibold text-sm"
+                onClick={() => submit("save")}
+                disabled={submitting !== null}
+                className="w-full py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark disabled:opacity-60"
               >
-                Save draft
+                {submitting === "save" ? "Saving…" : "Save changes"}
               </button>
-              <button
-                onClick={handleSubmit}
-                className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark"
-              >
-                Publish job
-              </button>
-            </div>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => submit("draft")}
+                  disabled={submitting !== null}
+                  className="flex-1 py-3 rounded-xl border border-primary text-primary font-semibold text-sm disabled:opacity-60"
+                >
+                  {submitting === "draft" ? "Saving…" : "Save draft"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => submit("publish")}
+                  disabled={submitting !== null}
+                  className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold text-sm hover:bg-primary-dark disabled:opacity-60"
+                >
+                  {submitting === "publish" ? "Publishing…" : "Publish job"}
+                </button>
+              </div>
+            )}
           </div>
         </main>
+        )}
       </div>
     </div>
   );
